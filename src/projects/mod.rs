@@ -1,0 +1,11 @@
+pub mod discrete_curvatures;
+pub mod discrete_exterior_calculus_project;
+pub mod geometric_flow;
+pub mod simplicial_complex_operators;
+pub mod poisson_problem;
+pub mod geodesic_distance;
+pub mod vector_field_decomposition;
+pub mod direction_field_design;
+pub mod harmonic_bases;
+pub mod tree_cotree;
+pub mod parameterization;
