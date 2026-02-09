@@ -1,5 +1,6 @@
 use crate::core::geometry::Geometry;
-use crate::linear_algebra::DenseMatrix;
+use crate::linear_algebra::{DenseMatrix, SparseMatrix};
+use crate::linear_algebra::traits::SparseOps;
 use crate::projects::vector_field_decomposition::HodgeDecomposition;
 
 pub struct HarmonicBases<'a> {

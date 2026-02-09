@@ -1,5 +1,6 @@
 use crate::core::geometry::Geometry;
-use crate::linear_algebra::{DenseMatrix, SparseMatrix, Vector};
+use crate::linear_algebra::{DenseMatrix, SparseMatrix, Vector, Cholesky};
+use crate::linear_algebra::traits::{SparseOps, LinearSolver, DenseMatrixOps, Vector3Ops};
 
 pub struct HeatMethod<'a> {
     pub geometry: &'a Geometry<'a>,
@@ -29,16 +30,12 @@ impl<'a> HeatMethod<'a> {
                 let ui = u[(i, 0)];
                 let ei = self.geometry.vector(h_idx);
 
-                let cp = faer::mat![
-                    [normal[(1, 0)] * ei[(2, 0)] - normal[(2, 0)] * ei[(1, 0)]],
-                    [normal[(2, 0)] * ei[(0, 0)] - normal[(0, 0)] * ei[(2, 0)]],
-                    [normal[(0, 0)] * ei[(1, 0)] - normal[(1, 0)] * ei[(0, 0)]]
-                ];
+                let cp = normal.cross(&ei);
                 grad_u += &cp * ui;
             }
 
             grad_u *= 1.0 / (2.0 * area);
-            let norm = (grad_u.transpose() * &grad_u)[(0, 0)].sqrt();
+            let norm = grad_u.norm();
             if norm > 0.0 {
                 grad_u *= 1.0 / norm;
             }
@@ -67,8 +64,8 @@ impl<'a> HeatMethod<'a> {
                     let cot_theta1 = self.geometry.cotan(h_idx);
                     let cot_theta2 = self.geometry.cotan(prev_idx);
 
-                    let dot1 = (e1.transpose() * xj)[(0, 0)];
-                    let dot2 = (e2.transpose() * xj)[(0, 0)];
+                    let dot1 = e1.dot(xj);
+                    let dot2 = e2.dot(xj);
                     sum += cot_theta1 * dot1 + cot_theta2 * dot2;
                 }
             }
@@ -91,13 +88,13 @@ impl<'a> HeatMethod<'a> {
     }
 
     pub fn compute(&self, delta: &DenseMatrix) -> DenseMatrix {
-        let llt = crate::linear_algebra::Cholesky::new(&self.f);
-        let u = llt.solve_positive_definite(delta);
+        let llt = Cholesky::new(&self.f);
+        let u = llt.solve(delta);
         let x = self.compute_vector_field(&u);
         let div = self.compute_divergence(&x);
         
-        let llt_a = crate::linear_algebra::Cholesky::new(&self.a);
-        let mut phi = llt_a.solve_positive_definite(&-div);
+        let llt_a = Cholesky::new(&self.a);
+        let mut phi = llt_a.solve(&-div);
         self.subtract_minimum_distance(&mut phi);
         phi
     }

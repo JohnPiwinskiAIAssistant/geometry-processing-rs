@@ -2,6 +2,7 @@ use geometry_processing_rs::core::mesh::{Mesh};
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::core::dec::DEC;
 use geometry_processing_rs::linear_algebra::{DenseMatrix};
+use geometry_processing_rs::linear_algebra::traits::SparseOps;
 
 mod common;
 use common::{load_solution, parse_polygon_soup};
@@ -104,6 +105,5 @@ fn test_dec() {
 
     // d1 * d0 = 0
     let d1d0 = &d1 * &d0;
-    use geometry_processing_rs::linear_algebra::sparse_matrix::SparseMatrixMethods;
     assert!(d1d0.frobenius_norm() < 1e-6);
 }

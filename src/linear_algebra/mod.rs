@@ -1,4 +1,5 @@
 pub mod sparse_matrix;
+pub mod traits;
 
 pub type Vector = faer::Mat<f64>;
 pub type PolygonSoup = crate::core::mesh::PolygonSoup;

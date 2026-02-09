@@ -1,6 +1,7 @@
 use geometry_processing_rs::core::mesh::Mesh;
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::linear_algebra::DenseMatrix;
+use geometry_processing_rs::linear_algebra::traits::SparseOps;
 
 mod common;
 use common::{load_solution, parse_polygon_soup, assert_near, assert_vector_near};
@@ -114,7 +115,6 @@ fn test_geometry() {
 
     // Test Laplace Matrix
     let laplace = geometry.laplace_matrix();
-    use geometry_processing_rs::linear_algebra::sparse_matrix::SparseMatrixMethods;
     for (val, r, c) in laplace_triplets {
         assert_near(val, laplace.get_val(r, c), 1e-5);
     }

@@ -1,5 +1,6 @@
 use crate::core::geometry::Geometry;
-use crate::linear_algebra::{DenseMatrix, SparseMatrix};
+use crate::linear_algebra::{DenseMatrix, SparseMatrix, Cholesky};
+use crate::linear_algebra::traits::LinearSolver;
 
 pub struct ScalarPoissonProblem<'a> {
     pub geometry: &'a Geometry<'a>,
@@ -26,7 +27,7 @@ impl<'a> ScalarPoissonProblem<'a> {
         // rhs = M * (rho_bar - rho)
         let rhs = &self.m * &(rho_bar - rho);
 
-        let llt = crate::linear_algebra::Cholesky::new(&self.a);
-        llt.solve_positive_definite(&rhs)
+        let llt = Cholesky::new(&self.a);
+        llt.solve(&rhs)
     }
 }

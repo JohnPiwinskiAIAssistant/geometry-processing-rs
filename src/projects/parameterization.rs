@@ -1,5 +1,6 @@
 use crate::core::geometry::Geometry;
-use crate::linear_algebra::{DenseMatrix, SparseMatrix, ComplexSparseMatrix, Vector, ComplexTriplet};
+use crate::linear_algebra::{DenseMatrix, SparseMatrix, ComplexSparseMatrix, Vector, ComplexTriplet, Cholesky};
+use crate::linear_algebra::traits::{Scalar, SparseOps, LinearSolver, DenseMatrixOps};
 use num_complex::Complex64;
 use crate::utils::solvers::Solvers;
 use std::collections::HashMap;
@@ -14,9 +15,8 @@ impl<'a> SpectralConformalParameterization<'a> {
     }
 
     pub fn build_conformal_energy(&self) -> ComplexSparseMatrix {
-        let mut ed = self.geometry.complex_laplace_matrix();
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
-        ed = ed.scale(Complex64::new(0.5, 0.0));
+        let ed = self.geometry.complex_laplace_matrix();
+        let ed = ed.scale(Complex64::new(0.5, 0.0));
 
         let i_img = Complex64::new(0.0, 1.0);
         let n = ed.nrows();
@@ -119,7 +119,6 @@ impl<'a> BoundaryFirstFlattening<'a> {
         let a = bff.build_special_laplace();
         bff.a_full = a;
         
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
         bff.a_ii = bff.a_full.sub_matrix(0, bff.n_i, 0, bff.n_i);
         bff.a_ib = bff.a_full.sub_matrix(0, bff.n_i, bff.n_i, bff.n_v);
         bff.a_bb = bff.a_full.sub_matrix(bff.n_i, bff.n_v, bff.n_i, bff.n_v);
@@ -194,8 +193,7 @@ impl<'a> BoundaryFirstFlattening<'a> {
             }
             t.add_entry(sum, i, i);
         }
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
-        SparseMatrix::from_triplets(self.n_v, self.n_v, &t.data)
+        SparseOps::from_triplets(self.n_v, self.n_v, &t.data)
     }
 
     pub fn flatten(&self, target: &DenseMatrix, given_scale_factors: bool) -> Vec<Vector> {
@@ -215,18 +213,18 @@ impl<'a> BoundaryFirstFlattening<'a> {
     }
 
     fn dirichlet_to_neumann(&self, phi: &DenseMatrix, g: &DenseMatrix) -> DenseMatrix {
-        let llt = crate::linear_algebra::Cholesky::new(&self.a_ii);
+        let llt = Cholesky::new(&self.a_ii);
         let rhs = phi - &(&self.a_ib * g);
-        let a = llt.solve_positive_definite(&rhs);
-        let first = &self.a_ib.transpose() * &a;
+        let a = llt.solve(&rhs);
+        let first = self.a_ib.transpose().to_col_major().unwrap() * &a;
         let second = &self.a_bb * g;
         -(first + second)
     }
 
     fn neumann_to_dirichlet(&self, phi: &DenseMatrix, h: &DenseMatrix) -> DenseMatrix {
-        let llt = crate::linear_algebra::Cholesky::new(&self.a_full);
+        let llt = Cholesky::new(&self.a_full);
         let rhs = faer::concat![[phi], [-h]];
-        let a = llt.solve_positive_definite(&rhs);
+        let a = llt.solve(&rhs);
         a.submatrix(self.n_i, 0, self.n_v - self.n_i, 1).to_owned()
     }
 

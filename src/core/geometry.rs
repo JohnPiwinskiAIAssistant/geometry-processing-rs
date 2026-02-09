@@ -3,7 +3,8 @@ use crate::core::face::Face;
 use crate::core::vertex::Vertex;
 use crate::core::corner::Corner;
 
-use crate::linear_algebra::{Vector, Complex, SparseMatrix, Triplet, ComplexTriplet, ComplexSparseMatrix};
+use crate::linear_algebra::{Vector, Complex, SparseMatrix, Triplet, ComplexTriplet, ComplexSparseMatrix, DenseMatrix};
+use crate::linear_algebra::traits::{SparseOps, DenseMatrixOps, Vector3Ops};
 
 pub struct Geometry<'a> {
     pub mesh: &'a Mesh,
@@ -379,8 +380,7 @@ impl<'a> Geometry<'a> {
             }
             t.add_entry(sum, i, i);
         }
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
-        SparseMatrix::from_triplets(n, n, &t.data)
+        SparseOps::from_triplets(n, n, &t.data)
     }
 
     pub fn mass_matrix(&self) -> SparseMatrix {
@@ -389,8 +389,7 @@ impl<'a> Geometry<'a> {
         for v in &self.mesh.vertices {
             t.add_entry(self.barycentric_dual_area(v), v.index, v.index);
         }
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
-        SparseMatrix::from_triplets(n, n, &t.data)
+        SparseOps::from_triplets(n, n, &t.data)
     }
 
     pub fn complex_laplace_matrix(&self) -> ComplexSparseMatrix {
@@ -407,7 +406,6 @@ impl<'a> Geometry<'a> {
             }
             t.add_entry(Complex::new(sum, 0.0), i, i);
         }
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
-        ComplexSparseMatrix::from_triplets(n, n, &t.data)
+        SparseOps::from_triplets(n, n, &t.data)
     }
 }

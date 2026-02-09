@@ -1,7 +1,8 @@
 use geometry_processing_rs::core::mesh::{Mesh};
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::projects::geodesic_distance::{HeatMethod};
-use geometry_processing_rs::linear_algebra::{DenseMatrix, Vector};
+use geometry_processing_rs::linear_algebra::{DenseMatrix, Vector, Cholesky};
+use geometry_processing_rs::linear_algebra::traits::{LinearSolver, SparseOps};
 
 mod common;
 use common::{load_solution, parse_polygon_soup};
@@ -72,8 +73,8 @@ fn test_geodesic_distance() {
     let heat_method = HeatMethod::new(&geometry);
     
     // computeVectorField
-    let llt = geometry_processing_rs::linear_algebra::Cholesky::new(&heat_method.f);
-    let u = llt.solve_positive_definite(&sol.delta);
+    let llt = Cholesky::new(&heat_method.f);
+    let u = llt.solve(&sol.delta);
     println!("u min: {}, u max: {}", (0..u.nrows()).map(|i| u[(i, 0)]).fold(f64::INFINITY, f64::min), (0..u.nrows()).map(|i| u[(i, 0)]).fold(f64::NEG_INFINITY, f64::max));
     let x = heat_method.compute_vector_field(&u);
     for i in 0..mesh.faces.len() {

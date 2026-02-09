@@ -2,6 +2,7 @@ use geometry_processing_rs::core::mesh::{Mesh};
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::projects::parameterization::{SpectralConformalParameterization};
 use geometry_processing_rs::linear_algebra::{Complex, ComplexTriplet, ComplexSparseMatrix, Vector};
+use geometry_processing_rs::linear_algebra::traits::SparseOps;
 use num_complex::Complex64;
 
 mod common;
@@ -44,9 +45,8 @@ fn parse_parameterization_solution(content: &str, v_count: usize) -> Parameteriz
         }
     }
 
-    use geometry_processing_rs::linear_algebra::sparse_matrix::SparseMatrixMethods;
     ParameterizationSolution {
-        ec_sol: ComplexSparseMatrix::from_triplets(v_count, v_count, &t.data),
+        ec_sol: SparseOps::from_triplets(v_count, v_count, &t.data),
         uv_sol,
     }
 }
@@ -71,7 +71,6 @@ fn test_parameterization() {
     }
     let ec = scp.build_conformal_energy();
     
-    use geometry_processing_rs::linear_algebra::sparse_matrix::SparseMatrixMethods;
     // Debug: check norms and NNZ
     println!("EC norm: {}, NNZ: {}", ec.frobenius_norm(), ec.compute_nnz());
     println!("Sol EC norm: {}, NNZ: {}", sol.ec_sol.frobenius_norm(), sol.ec_sol.compute_nnz());

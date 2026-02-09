@@ -1,4 +1,5 @@
 use geometry_processing_rs::linear_algebra::*;
+use geometry_processing_rs::linear_algebra::traits::{SparseOps, LinearSolver, DenseMatrixOps, Vector3Ops};
 
 #[test]
 fn test_vector() {
@@ -165,7 +166,7 @@ fn test_dense_matrix() {
 #[test]
 fn test_sparse_matrix() {
     use geometry_processing_rs::linear_algebra::{DenseMatrix, SparseMatrix};
-    use geometry_processing_rs::linear_algebra::sparse_matrix::{identity, diag, Triplet, SparseMatrixMethods, Cholesky, LU, QR};
+    use geometry_processing_rs::linear_algebra::sparse_matrix::{identity, diag, Triplet, Cholesky, LU, QR};
     let mut triplet = Triplet::new(2, 2);
     triplet.add_entry(1.0, 0, 0);
     triplet.add_entry(2.0, 1, 0);
@@ -206,12 +207,12 @@ fn test_sparse_matrix() {
     triplet_solv.add_entry(3.0, 1, 1);
     let s_solv = SparseMatrix::from_triplets(2, 2, &triplet_solv.data);
     
-    let x_chol = Cholesky::new(&s_solv).solve_positive_definite(&b);
-    assert!((x_chol[(0, 0)] - 2.0).abs() < 1e-8);
-
-    let x_lu = LU::new(&s_solv).solve_square(&b);
-    assert!((x_lu[(1, 0)] - 2.0).abs() < 1e-8);
-
+    let x_chol = Cholesky::new(&s_solv).solve(&b);
+    assert!((x_chol.read(0, 0) - 2.0).abs() < 1e-8);
+    
+    let x_lu = LU::new(&s_solv).solve(&b);
+    assert!((x_lu.read(1, 0) - 2.0).abs() < 1e-8);
+    
     let x_qr = QR::new(&s_solv).solve(&b);
-    assert!((x_qr[(0, 0)] - 2.0).abs() < 1e-8);
+    assert!((x_qr.read(0, 0) - 2.0).abs() < 1e-8);
 }

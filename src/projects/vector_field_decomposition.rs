@@ -1,6 +1,7 @@
 use crate::core::geometry::Geometry;
 use crate::core::dec::DEC;
-use crate::linear_algebra::{SparseMatrix, DenseMatrix};
+use crate::linear_algebra::{SparseMatrix, DenseMatrix, Cholesky, LU};
+use crate::linear_algebra::traits::{SparseOps, LinearSolver};
 
 pub struct HodgeDecomposition {
     pub hodge1: SparseMatrix,
@@ -22,7 +23,6 @@ impl HodgeDecomposition {
         let d0 = DEC::build_exterior_derivative_0_form(geometry);
         let d1 = DEC::build_exterior_derivative_1_form(geometry);
 
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
         let hodge1_inv = hodge1.invert_diagonal();
         let hodge2_inv = hodge2.invert_diagonal();
         let d0t = d0.transpose().to_col_major().unwrap();
@@ -44,15 +44,15 @@ impl HodgeDecomposition {
 
     pub fn compute_exact_component(&self, omega: &DenseMatrix) -> DenseMatrix {
         let rhs = &self.d0t * &(&self.hodge1 * omega);
-        let llt = crate::linear_algebra::Cholesky::new(&self.a);
-        let alpha = llt.solve_positive_definite(&rhs);
+        let llt = Cholesky::new(&self.a);
+        let alpha = llt.solve(&rhs);
         &self.d0 * &alpha
     }
 
     pub fn compute_co_exact_component(&self, omega: &DenseMatrix) -> DenseMatrix {
         let rhs = &self.d1 * omega;
-        let lu = crate::linear_algebra::LU::new(&self.b);
-        let beta_tilde = lu.solve_square(&rhs);
+        let lu = LU::new(&self.b);
+        let beta_tilde = lu.solve(&rhs);
         &self.hodge1_inv * &(&self.d1t * &beta_tilde)
     }
 

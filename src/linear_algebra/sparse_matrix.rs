@@ -2,6 +2,7 @@ use faer::sparse::SparseColMat;
 use crate::linear_algebra::{DenseMatrix};
 use faer::prelude::SpSolver;
 use num_complex::Complex64;
+use crate::linear_algebra::traits::{SparseOps, LinearSolver};
 
 pub type SparseMatrix = SparseColMat<usize, f64>;
 pub type ComplexSparseMatrix = SparseColMat<usize, Complex64>;
@@ -46,17 +47,7 @@ impl ComplexTriplet {
     }
 }
 
-pub trait SparseMatrixMethods<E: faer::Entity> {
-    fn from_triplets(rows: usize, cols: usize, triplets: &[(usize, usize, E)]) -> Self;
-    fn invert_diagonal(&self) -> Self;
-    fn sub_matrix(&self, r0: usize, r1: usize, c0: usize, c1: usize) -> Self;
-    fn get_val(&self, row: usize, col: usize) -> E;
-    fn frobenius_norm(&self) -> f64;
-    fn scale(&self, s: E) -> Self;
-    fn compute_nnz(&self) -> usize;
-}
-
-impl SparseMatrixMethods<f64> for SparseMatrix {
+impl SparseOps<f64> for SparseMatrix {
     fn from_triplets(rows: usize, cols: usize, triplets: &[(usize, usize, f64)]) -> Self {
         SparseColMat::try_new_from_triplets(rows, cols, triplets).unwrap()
     }
@@ -130,7 +121,7 @@ impl SparseMatrixMethods<f64> for SparseMatrix {
     }
 }
 
-impl SparseMatrixMethods<Complex64> for ComplexSparseMatrix {
+impl SparseOps<Complex64> for ComplexSparseMatrix {
     fn from_triplets(rows: usize, cols: usize, triplets: &[(usize, usize, Complex64)]) -> Self {
         SparseColMat::try_new_from_triplets(rows, cols, triplets).unwrap()
     }
@@ -214,12 +205,12 @@ impl SparseMatrixMethods<Complex64> for ComplexSparseMatrix {
 pub fn diag(v: &DenseMatrix) -> SparseMatrix {
     let n = v.nrows();
     let data: Vec<_> = (0..n).map(|i| (i, i, v[(i, 0)])).collect();
-    SparseMatrix::from_triplets(n, n, &data)
+    SparseOps::from_triplets(n, n, &data)
 }
 
 pub fn identity(m: usize, n: usize) -> SparseMatrix {
     let data: Vec<_> = (0..m.min(n)).map(|i| (i, i, 1.0)).collect();
-    SparseMatrix::from_triplets(m, n, &data)
+    SparseOps::from_triplets(m, n, &data)
 }
 
 pub struct Cholesky {
@@ -230,7 +221,10 @@ impl Cholesky {
     pub fn new(mat: &SparseMatrix) -> Self {
         Self { llt: mat.as_ref().sp_cholesky(faer::Side::Lower).unwrap() }
     }
-    pub fn solve_positive_definite(&self, rhs: &DenseMatrix) -> DenseMatrix {
+}
+
+impl LinearSolver<f64> for Cholesky {
+    fn solve(&self, rhs: &DenseMatrix) -> DenseMatrix {
         let mut res = rhs.clone();
         self.llt.solve_in_place(res.as_mut());
         res
@@ -245,7 +239,10 @@ impl LU {
     pub fn new(mat: &SparseMatrix) -> Self {
         Self { lu: mat.as_ref().sp_lu().unwrap() }
     }
-    pub fn solve_square(&self, rhs: &DenseMatrix) -> DenseMatrix {
+}
+
+impl LinearSolver<f64> for LU {
+    fn solve(&self, rhs: &DenseMatrix) -> DenseMatrix {
         let mut res = rhs.clone();
         self.lu.solve_in_place(res.as_mut());
         res
@@ -260,7 +257,10 @@ impl QR {
     pub fn new(mat: &SparseMatrix) -> Self {
         Self { mat: mat.clone() }
     }
-    pub fn solve(&self, rhs: &DenseMatrix) -> DenseMatrix {
+}
+
+impl LinearSolver<f64> for QR {
+    fn solve(&self, rhs: &DenseMatrix) -> DenseMatrix {
         let qr = self.mat.to_dense().as_ref().col_piv_qr();
         let mut res = rhs.clone();
         qr.solve_in_place(res.as_mut());

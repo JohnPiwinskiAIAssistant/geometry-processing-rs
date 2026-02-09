@@ -1,5 +1,6 @@
 use crate::core::geometry::Geometry;
-use crate::linear_algebra::{DenseMatrix, SparseMatrix};
+use crate::linear_algebra::{DenseMatrix, SparseMatrix, Cholesky, LU};
+use crate::linear_algebra::traits::{SparseOps, LinearSolver, DenseMatrixOps, Vector3Ops};
 use crate::projects::vector_field_decomposition::HodgeDecomposition;
 use crate::projects::harmonic_bases::HarmonicBases;
 
@@ -52,8 +53,7 @@ impl<'a> TrivialConnections<'a> {
             }
         }
 
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
-        SparseMatrix::from_triplets(n, n, &t.data)
+        SparseOps::from_triplets(n, n, &t.data)
     }
 
     pub fn satisfy_gauss_bonnet(&self, singularity: &[f64]) -> bool {
@@ -69,9 +69,9 @@ impl<'a> TrivialConnections<'a> {
             rhs[(i, 0)] = u;
         }
 
-        let llt = crate::linear_algebra::Cholesky::new(&self.a_mat);
-        let beta_tilde = llt.solve_positive_definite(&rhs);
-
+        let llt = Cholesky::new(&self.a_mat);
+        let beta_tilde = llt.solve(&rhs);
+        
         &self.hodge1 * &(&self.d0 * &beta_tilde)
     }
 
@@ -79,12 +79,12 @@ impl<'a> TrivialConnections<'a> {
         let u = self.geometry.vector(h_idx);
         let f_idx = self.geometry.mesh.halfedges[h_idx].face.expect("Should have face");
         let [e1, e2] = self.geometry.orthonormal_bases(&self.geometry.mesh.faces[f_idx]);
-        let theta_ij = (u.transpose() * &e2)[(0, 0)].atan2((u.transpose() * &e1)[(0, 0)]);
+        let theta_ij = e2.dot(&u).atan2(e1.dot(&u));
 
         let twin_idx = self.geometry.mesh.halfedges[h_idx].twin.expect("Should have twin");
         let g_idx = self.geometry.mesh.halfedges[twin_idx].face.expect("Should have face");
         let [f1, f2] = self.geometry.orthonormal_bases(&self.geometry.mesh.faces[g_idx]);
-        let theta_ji = (u.transpose() * &f2)[(0, 0)].atan2((u.transpose() * &f1)[(0, 0)]);
+        let theta_ji = f2.dot(&u).atan2(f1.dot(&u));
 
         alpha_i - theta_ij + theta_ji
     }
@@ -113,8 +113,8 @@ impl<'a> TrivialConnections<'a> {
                 rhs[(i, 0)] = sum;
             }
 
-            let lu = crate::linear_algebra::LU::new(&self.p_mat);
-            let z = lu.solve_square(&rhs);
+            let lu = LU::new(&self.p_mat);
+            let z = lu.solve(&rhs);
 
             for i in 0..n {
                 let basis = &self.bases[i];

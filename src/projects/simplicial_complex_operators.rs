@@ -1,6 +1,7 @@
 use crate::core::mesh::Mesh;
 use crate::core::mesh_subset::MeshSubset;
 use crate::linear_algebra::{SparseMatrix, Triplet, DenseMatrix};
+use crate::linear_algebra::traits::SparseOps;
 
 pub struct SimplicialComplexOperators {
     pub mesh: Mesh,
@@ -26,8 +27,7 @@ impl SimplicialComplexOperators {
             t.add_entry(1.0, e.index, v1);
             t.add_entry(1.0, e.index, v2);
         }
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
-        SparseMatrix::from_triplets(mesh.edges.len(), mesh.vertices.len(), &t.data)
+        SparseOps::from_triplets(mesh.edges.len(), mesh.vertices.len(), &t.data)
     }
 
     fn build_edge_face_adjacency_matrix(mesh: &Mesh) -> SparseMatrix {
@@ -38,8 +38,7 @@ impl SimplicialComplexOperators {
                 t.add_entry(1.0, f.index, e_idx);
             }
         }
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
-        SparseMatrix::from_triplets(mesh.faces.len(), mesh.edges.len(), &t.data)
+        SparseOps::from_triplets(mesh.faces.len(), mesh.edges.len(), &t.data)
     }
 
     pub fn build_vertex_vector(&self, subset: &MeshSubset) -> DenseMatrix {

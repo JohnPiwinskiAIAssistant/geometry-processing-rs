@@ -1,5 +1,6 @@
 use crate::core::geometry::Geometry;
-use crate::linear_algebra::{DenseMatrix, SparseMatrix};
+use crate::linear_algebra::{DenseMatrix, SparseMatrix, Cholesky};
+use crate::linear_algebra::traits::{SparseOps, LinearSolver};
 
 pub struct MeanCurvatureFlow<'a, 'b> {
     pub geometry: &'a mut Geometry<'b>,
@@ -12,7 +13,6 @@ impl<'a, 'b> MeanCurvatureFlow<'a, 'b> {
 
     pub fn build_flow_operator(&self, m: &SparseMatrix, h: f64) -> SparseMatrix {
         let a = self.geometry.laplace_matrix();
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
         m + &a.scale(h)
     }
 
@@ -35,8 +35,8 @@ impl<'a, 'b> MeanCurvatureFlow<'a, 'b> {
         let rhs = &m * &f0;
 
         // solve linear system (M + hA)fh = Mf0
-        let llt = crate::linear_algebra::Cholesky::new(&f);
-        let fh = llt.solve_positive_definite(&rhs);
+        let llt = Cholesky::new(&f);
+        let fh = llt.solve(&rhs);
 
         // update positions
         for v in &self.geometry.mesh.vertices {
@@ -63,7 +63,6 @@ impl<'a, 'b> ModifiedMeanCurvatureFlow<'a, 'b> {
     }
 
     pub fn build_flow_operator(&self, m: &SparseMatrix, h: f64) -> SparseMatrix {
-        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
         m + &self.laplace.scale(h)
     }
 
@@ -84,8 +83,8 @@ impl<'a, 'b> ModifiedMeanCurvatureFlow<'a, 'b> {
 
         let rhs = &m * &f0;
 
-        let llt = crate::linear_algebra::Cholesky::new(&f);
-        let fh = llt.solve_positive_definite(&rhs);
+        let llt = Cholesky::new(&f);
+        let fh = llt.solve(&rhs);
 
         for v in &self.geometry.mesh.vertices {
             let i = v.index;
