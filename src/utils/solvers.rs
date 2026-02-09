@@ -1,11 +1,11 @@
-use crate::linear_algebra::{DenseMatrix, ComplexDenseMatrix, ComplexSparseMatrix};
+use crate::linear_algebra::{DenseMatrix, ComplexDenseMatrix, SparseMatrix, Complex};
 use faer::prelude::SpSolver;
 use num_complex::Complex64;
 
 pub struct Solvers;
 
 impl Solvers {
-    pub fn residual(a: &ComplexSparseMatrix, x: &ComplexDenseMatrix) -> f64 {
+    pub fn residual(a: &SparseMatrix<Complex>, x: &ComplexDenseMatrix) -> f64 {
         let mut b = faer::Mat::<Complex64>::zeros(a.nrows(), x.ncols());
         let a_values = a.values();
         for j in 0..x.ncols() {
@@ -24,7 +24,7 @@ impl Solvers {
         b.norm_l1()
     }
 
-    pub fn solve_inverse_power_method(a: &ComplexSparseMatrix) -> ComplexDenseMatrix {
+    pub fn solve_inverse_power_method(a: &SparseMatrix<Complex>) -> ComplexDenseMatrix {
         let n = a.nrows();
         let mut x = faer::Mat::<Complex64>::from_fn(n, 1, |_, _| Complex64::new(rand::random(), rand::random()));
         

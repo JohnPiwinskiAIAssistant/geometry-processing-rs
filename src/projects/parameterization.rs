@@ -1,5 +1,5 @@
 use crate::core::geometry::Geometry;
-use crate::linear_algebra::{DenseMatrix, SparseMatrix, ComplexSparseMatrix, Vector, ComplexTriplet, Cholesky};
+use crate::linear_algebra::{DenseMatrix, SparseMatrix, Vector, Triplet, Cholesky, Complex};
 use crate::linear_algebra::traits::{Scalar, SparseOps, LinearSolver, DenseMatrixOps};
 use num_complex::Complex64;
 use crate::utils::solvers::Solvers;
@@ -14,13 +14,13 @@ impl<'a> SpectralConformalParameterization<'a> {
         Self { geometry }
     }
 
-    pub fn build_conformal_energy(&self) -> ComplexSparseMatrix {
+    pub fn build_conformal_energy(&self) -> SparseMatrix<Complex> {
         let ed = self.geometry.complex_laplace_matrix();
         let ed = ed.scale(Complex64::new(0.5, 0.0));
 
         let i_img = Complex64::new(0.0, 1.0);
         let n = ed.nrows();
-        let mut t = ComplexTriplet::new(n, n);
+        let mut t = Triplet::<Complex>::new(n, n);
         for b in &self.geometry.mesh.boundaries {
             let start = b.halfedge.expect("Boundary should have halfedge");
             let mut curr = start;
@@ -38,7 +38,7 @@ impl<'a> SpectralConformalParameterization<'a> {
             }
         }
 
-        let a = ComplexSparseMatrix::from_triplets(n, n, &t.data);
+        let a = SparseMatrix::<Complex>::from_triplets(n, n, &t.data);
         &ed - &a
     }
 
@@ -90,10 +90,10 @@ pub struct BoundaryFirstFlattening<'a> {
     pub k_gaussian: DenseMatrix,
     pub k_geodesic: DenseMatrix,
     pub l_lengths: DenseMatrix,
-    pub a_ii: SparseMatrix,
-    pub a_ib: SparseMatrix,
-    pub a_bb: SparseMatrix,
-    pub a_full: SparseMatrix,
+    pub a_ii: SparseMatrix<f64>,
+    pub a_ib: SparseMatrix<f64>,
+    pub a_bb: SparseMatrix<f64>,
+    pub a_full: SparseMatrix<f64>,
 }
 
 impl<'a> BoundaryFirstFlattening<'a> {
@@ -106,10 +106,10 @@ impl<'a> BoundaryFirstFlattening<'a> {
             k_gaussian: DenseMatrix::zeros(0, 0),
             k_geodesic: DenseMatrix::zeros(0, 0),
             l_lengths: DenseMatrix::zeros(0, 0),
-            a_ii: crate::linear_algebra::sparse_matrix::identity(0, 0),
-            a_ib: crate::linear_algebra::sparse_matrix::identity(0, 0),
-            a_bb: crate::linear_algebra::sparse_matrix::identity(0, 0),
-            a_full: crate::linear_algebra::sparse_matrix::identity(0, 0),
+            a_ii: crate::linear_algebra::sparse_matrix::identity::<f64>(0, 0),
+            a_ib: crate::linear_algebra::sparse_matrix::identity::<f64>(0, 0),
+            a_bb: crate::linear_algebra::sparse_matrix::identity::<f64>(0, 0),
+            a_full: crate::linear_algebra::sparse_matrix::identity::<f64>(0, 0),
         };
 
         bff.index_vertices();
@@ -178,8 +178,8 @@ impl<'a> BoundaryFirstFlattening<'a> {
         }
     }
 
-    fn build_special_laplace(&self) -> SparseMatrix {
-        let mut t = crate::linear_algebra::Triplet::new(self.n_v, self.n_v);
+    fn build_special_laplace(&self) -> SparseMatrix<f64> {
+        let mut t = Triplet::<f64>::new(self.n_v, self.n_v);
         for v in &self.geometry.mesh.vertices {
             let i = *self.vertex_index.get(&v.index).unwrap();
             let mut sum = 1e-8;
@@ -213,7 +213,7 @@ impl<'a> BoundaryFirstFlattening<'a> {
     }
 
     fn dirichlet_to_neumann(&self, phi: &DenseMatrix, g: &DenseMatrix) -> DenseMatrix {
-        let llt = Cholesky::new(&self.a_ii);
+        let llt = Cholesky::<f64>::new(&self.a_ii);
         let rhs = phi - &(&self.a_ib * g);
         let a = llt.solve(&rhs);
         let first = self.a_ib.transpose().to_col_major().unwrap() * &a;
@@ -222,7 +222,7 @@ impl<'a> BoundaryFirstFlattening<'a> {
     }
 
     fn neumann_to_dirichlet(&self, phi: &DenseMatrix, h: &DenseMatrix) -> DenseMatrix {
-        let llt = Cholesky::new(&self.a_full);
+        let llt = Cholesky::<f64>::new(&self.a_full);
         let rhs = faer::concat![[phi], [-h]];
         let a = llt.solve(&rhs);
         a.submatrix(self.n_i, 0, self.n_v - self.n_i, 1).to_owned()

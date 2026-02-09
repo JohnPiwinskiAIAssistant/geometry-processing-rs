@@ -11,7 +11,7 @@ impl<'a, 'b> MeanCurvatureFlow<'a, 'b> {
         Self { geometry }
     }
 
-    pub fn build_flow_operator(&self, m: &SparseMatrix, h: f64) -> SparseMatrix {
+    pub fn build_flow_operator(&self, m: &SparseMatrix<f64>, h: f64) -> SparseMatrix<f64> {
         let a = self.geometry.laplace_matrix();
         m + &a.scale(h)
     }
@@ -35,7 +35,7 @@ impl<'a, 'b> MeanCurvatureFlow<'a, 'b> {
         let rhs = &m * &f0;
 
         // solve linear system (M + hA)fh = Mf0
-        let llt = Cholesky::new(&f);
+        let llt = Cholesky::<f64>::new(&f);
         let fh = llt.solve(&rhs);
 
         // update positions
@@ -53,7 +53,7 @@ impl<'a, 'b> MeanCurvatureFlow<'a, 'b> {
 
 pub struct ModifiedMeanCurvatureFlow<'a, 'b> {
     pub geometry: &'a mut Geometry<'b>,
-    pub laplace: SparseMatrix,
+    pub laplace: SparseMatrix<f64>,
 }
 
 impl<'a, 'b> ModifiedMeanCurvatureFlow<'a, 'b> {
@@ -62,7 +62,7 @@ impl<'a, 'b> ModifiedMeanCurvatureFlow<'a, 'b> {
         Self { geometry, laplace }
     }
 
-    pub fn build_flow_operator(&self, m: &SparseMatrix, h: f64) -> SparseMatrix {
+    pub fn build_flow_operator(&self, m: &SparseMatrix<f64>, h: f64) -> SparseMatrix<f64> {
         m + &self.laplace.scale(h)
     }
 
@@ -83,7 +83,7 @@ impl<'a, 'b> ModifiedMeanCurvatureFlow<'a, 'b> {
 
         let rhs = &m * &f0;
 
-        let llt = Cholesky::new(&f);
+        let llt = Cholesky::<f64>::new(&f);
         let fh = llt.solve(&rhs);
 
         for v in &self.geometry.mesh.vertices {

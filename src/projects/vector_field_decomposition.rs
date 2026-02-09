@@ -4,16 +4,16 @@ use crate::linear_algebra::{SparseMatrix, DenseMatrix, Cholesky, LU};
 use crate::linear_algebra::traits::{SparseOps, LinearSolver};
 
 pub struct HodgeDecomposition {
-    pub hodge1: SparseMatrix,
-    pub hodge2: SparseMatrix,
-    pub d0: SparseMatrix,
-    pub d1: SparseMatrix,
-    pub hodge1_inv: SparseMatrix,
-    pub hodge2_inv: SparseMatrix,
-    pub d0t: SparseMatrix,
-    pub d1t: SparseMatrix,
-    pub a: SparseMatrix,
-    pub b: SparseMatrix,
+    pub hodge1: SparseMatrix<f64>,
+    pub hodge2: SparseMatrix<f64>,
+    pub d0: SparseMatrix<f64>,
+    pub d1: SparseMatrix<f64>,
+    pub hodge1_inv: SparseMatrix<f64>,
+    pub hodge2_inv: SparseMatrix<f64>,
+    pub d0t: SparseMatrix<f64>,
+    pub d1t: SparseMatrix<f64>,
+    pub a: SparseMatrix<f64>,
+    pub b: SparseMatrix<f64>,
 }
 
 impl HodgeDecomposition {
@@ -30,7 +30,7 @@ impl HodgeDecomposition {
 
         let v_count = geometry.mesh.vertices.len();
         let mut a = &d0t * &(&hodge1 * &d0);
-        a = &a + &crate::linear_algebra::sparse_matrix::identity(v_count, v_count).scale(1e-8);
+        a = &a + &crate::linear_algebra::sparse_matrix::identity::<f64>(v_count, v_count).scale(1e-8);
 
         let b = &d1 * &(&hodge1_inv * &d1t);
 
@@ -44,14 +44,14 @@ impl HodgeDecomposition {
 
     pub fn compute_exact_component(&self, omega: &DenseMatrix) -> DenseMatrix {
         let rhs = &self.d0t * &(&self.hodge1 * omega);
-        let llt = Cholesky::new(&self.a);
+        let llt = Cholesky::<f64>::new(&self.a);
         let alpha = llt.solve(&rhs);
         &self.d0 * &alpha
     }
 
     pub fn compute_co_exact_component(&self, omega: &DenseMatrix) -> DenseMatrix {
         let rhs = &self.d1 * omega;
-        let lu = LU::new(&self.b);
+        let lu = LU::<f64>::new(&self.b);
         let beta_tilde = lu.solve(&rhs);
         &self.hodge1_inv * &(&self.d1t * &beta_tilde)
     }

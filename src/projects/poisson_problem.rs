@@ -4,8 +4,8 @@ use crate::linear_algebra::traits::LinearSolver;
 
 pub struct ScalarPoissonProblem<'a> {
     pub geometry: &'a Geometry<'a>,
-    pub a: SparseMatrix,
-    pub m: SparseMatrix,
+    pub a: SparseMatrix<f64>,
+    pub m: SparseMatrix<f64>,
     pub total_area: f64,
 }
 
@@ -27,7 +27,7 @@ impl<'a> ScalarPoissonProblem<'a> {
         // rhs = M * (rho_bar - rho)
         let rhs = &self.m * &(rho_bar - rho);
 
-        let llt = Cholesky::new(&self.a);
+        let llt = Cholesky::<f64>::new(&self.a);
         llt.solve(&rhs)
     }
 }

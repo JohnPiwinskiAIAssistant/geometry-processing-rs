@@ -1,11 +1,11 @@
 use crate::core::geometry::Geometry;
 use crate::linear_algebra::{DenseMatrix, SparseMatrix, Vector, Cholesky};
-use crate::linear_algebra::traits::{SparseOps, LinearSolver, DenseMatrixOps, Vector3Ops};
+use crate::linear_algebra::traits::{LinearSolver, DenseMatrixOps, Vector3Ops};
 
 pub struct HeatMethod<'a> {
     pub geometry: &'a Geometry<'a>,
-    pub a: SparseMatrix,
-    pub f: SparseMatrix,
+    pub a: SparseMatrix<f64>,
+    pub f: SparseMatrix<f64>,
 }
 
 impl<'a> HeatMethod<'a> {
@@ -88,12 +88,12 @@ impl<'a> HeatMethod<'a> {
     }
 
     pub fn compute(&self, delta: &DenseMatrix) -> DenseMatrix {
-        let llt = Cholesky::new(&self.f);
+        let llt = Cholesky::<f64>::new(&self.f);
         let u = llt.solve(delta);
         let x = self.compute_vector_field(&u);
         let div = self.compute_divergence(&x);
         
-        let llt_a = Cholesky::new(&self.a);
+        let llt_a = Cholesky::<f64>::new(&self.a);
         let mut phi = llt_a.solve(&-div);
         self.subtract_minimum_distance(&mut phi);
         phi

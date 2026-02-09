@@ -1,16 +1,16 @@
 use crate::core::geometry::Geometry;
-use crate::linear_algebra::{DenseMatrix, SparseMatrix, Cholesky, LU};
-use crate::linear_algebra::traits::{SparseOps, LinearSolver, DenseMatrixOps, Vector3Ops};
+use crate::linear_algebra::{DenseMatrix, SparseMatrix, Cholesky, LU, Triplet};
+use crate::linear_algebra::traits::{SparseOps, LinearSolver, DenseMatrixOps};
 use crate::projects::vector_field_decomposition::HodgeDecomposition;
 use crate::projects::harmonic_bases::HarmonicBases;
 
 pub struct TrivialConnections<'a> {
     pub geometry: &'a Geometry<'a>,
     pub bases: Vec<DenseMatrix>,
-    pub p_mat: SparseMatrix,
-    pub a_mat: SparseMatrix,
-    pub hodge1: SparseMatrix,
-    pub d0: SparseMatrix,
+    pub p_mat: SparseMatrix<f64>,
+    pub a_mat: SparseMatrix<f64>,
+    pub hodge1: SparseMatrix<f64>,
+    pub d0: SparseMatrix<f64>,
 }
 
 impl<'a> TrivialConnections<'a> {
@@ -25,7 +25,7 @@ impl<'a> TrivialConnections<'a> {
         let mut tc = Self {
             geometry,
             bases,
-            p_mat: crate::linear_algebra::sparse_matrix::identity(0, 0), // stub
+            p_mat: crate::linear_algebra::sparse_matrix::identity::<f64>(0, 0), // stub
             a_mat: hodge_decomp.a,
             hodge1: hodge_decomp.hodge1,
             d0: hodge_decomp.d0,
@@ -34,9 +34,9 @@ impl<'a> TrivialConnections<'a> {
         tc
     }
 
-    fn build_period_matrix(&self) -> SparseMatrix {
+    fn build_period_matrix(&self) -> SparseMatrix<f64> {
         let n = self.bases.len();
-        let mut t = crate::linear_algebra::Triplet::new(n, n);
+        let mut t = Triplet::<f64>::new(n, n);
 
         for i in 0..n {
             let generator = &self.geometry.mesh.generators[i];
@@ -69,7 +69,7 @@ impl<'a> TrivialConnections<'a> {
             rhs[(i, 0)] = u;
         }
 
-        let llt = Cholesky::new(&self.a_mat);
+        let llt = Cholesky::<f64>::new(&self.a_mat);
         let beta_tilde = llt.solve(&rhs);
         
         &self.hodge1 * &(&self.d0 * &beta_tilde)
@@ -113,7 +113,7 @@ impl<'a> TrivialConnections<'a> {
                 rhs[(i, 0)] = sum;
             }
 
-            let lu = LU::new(&self.p_mat);
+            let lu = LU::<f64>::new(&self.p_mat);
             let z = lu.solve(&rhs);
 
             for i in 0..n {

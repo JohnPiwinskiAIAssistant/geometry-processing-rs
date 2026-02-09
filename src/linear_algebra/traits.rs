@@ -1,4 +1,5 @@
 use faer::Mat;
+use faer::sparse::SparseColMat;
 use num_complex::Complex64;
 use std::ops::{Add, Sub, Mul, Div, Neg};
 
@@ -10,6 +11,7 @@ pub trait Scalar:
     PartialEq +
     Default +
     faer::Entity +
+    faer::ComplexField +
     'static
 {
     fn zero() -> Self;
@@ -17,6 +19,10 @@ pub trait Scalar:
     fn from_f64(v: f64) -> Self;
     fn abs(&self) -> f64;
     fn sqrt(&self) -> Self;
+    
+    // faer-specific helpers for sparse matrix access
+    fn get_sparse_value(mat: &SparseColMat<usize, Self>, k: usize) -> Self;
+    fn sparse_values_count(mat: &SparseColMat<usize, Self>) -> usize;
 }
 
 impl Scalar for f64 {
@@ -25,6 +31,13 @@ impl Scalar for f64 {
     fn from_f64(v: f64) -> Self { v }
     fn abs(&self) -> f64 { f64::abs(*self) }
     fn sqrt(&self) -> Self { f64::sqrt(*self) }
+
+    fn get_sparse_value(mat: &SparseColMat<usize, Self>, k: usize) -> Self {
+        mat.values()[k]
+    }
+    fn sparse_values_count(mat: &SparseColMat<usize, Self>) -> usize {
+        mat.values().len()
+    }
 }
 
 impl Scalar for Complex64 {
@@ -33,6 +46,14 @@ impl Scalar for Complex64 {
     fn from_f64(v: f64) -> Self { Complex64::new(v, 0.0) }
     fn abs(&self) -> f64 { Complex64::norm(*self) }
     fn sqrt(&self) -> Self { Complex64::sqrt(*self) }
+
+    fn get_sparse_value(mat: &SparseColMat<usize, Self>, k: usize) -> Self {
+        let values = mat.values();
+        Complex64::new(values.re[k], values.im[k])
+    }
+    fn sparse_values_count(mat: &SparseColMat<usize, Self>) -> usize {
+        mat.values().re.len()
+    }
 }
 
 /// Generic matrix operations for dense matrices/vectors

@@ -3,8 +3,8 @@ use crate::core::face::Face;
 use crate::core::vertex::Vertex;
 use crate::core::corner::Corner;
 
-use crate::linear_algebra::{Vector, Complex, SparseMatrix, Triplet, ComplexTriplet, ComplexSparseMatrix, DenseMatrix};
-use crate::linear_algebra::traits::{SparseOps, DenseMatrixOps, Vector3Ops};
+use crate::linear_algebra::{Vector, Complex, SparseMatrix, Triplet, DenseMatrix};
+use crate::linear_algebra::traits::{SparseOps, DenseMatrixOps, Vector3Ops, Scalar};
 
 pub struct Geometry<'a> {
     pub mesh: &'a Mesh,
@@ -101,14 +101,10 @@ impl<'a> Geometry<'a> {
         }
         let h_idx = f.halfedge.unwrap();
         let u = self.vector(h_idx);
-        let v = -&self.vector(self.mesh.halfedges[h_idx].prev.unwrap());
+        let v = -self.vector(self.mesh.halfedges[h_idx].prev.unwrap());
         
-        let cp = faer::mat![
-            [u[(1, 0)] * v[(2, 0)] - u[(2, 0)] * v[(1, 0)]],
-            [u[(2, 0)] * v[(0, 0)] - u[(0, 0)] * v[(2, 0)]],
-            [u[(0, 0)] * v[(1, 0)] - u[(1, 0)] * v[(0, 0)]]
-        ];
-        let norm = (cp.transpose() * &cp)[(0, 0)].sqrt();
+        let cp = u.cross(&v);
+        let norm = cp.norm();
         Some(cp * (1.0 / norm))
     }
 
@@ -137,26 +133,14 @@ impl<'a> Geometry<'a> {
         let ac = c - a;
         let ab = b - a;
         
-        let w = faer::mat![
-            [ab[(1, 0)] * ac[(2, 0)] - ab[(2, 0)] * ac[(1, 0)]],
-            [ab[(2, 0)] * ac[(0, 0)] - ab[(0, 0)] * ac[(2, 0)]],
-            [ab[(0, 0)] * ac[(1, 0)] - ab[(1, 0)] * ac[(0, 0)]]
-        ];
+        let w = ab.cross(&ac);
 
-        let ac2 = (ac.transpose() * &ac)[(0, 0)];
-        let ab2 = (ab.transpose() * &ab)[(0, 0)];
-        let w2 = (w.transpose() * &w)[(0, 0)];
+        let ac2 = ac.norm_sq();
+        let ab2 = ab.norm_sq();
+        let w2 = w.norm_sq();
 
-        let w_x_ab = faer::mat![
-            [w[(1, 0)] * ab[(2, 0)] - w[(2, 0)] * ab[(1, 0)]],
-            [w[(2, 0)] * ab[(0, 0)] - w[(0, 0)] * ab[(2, 0)]],
-            [w[(0, 0)] * ab[(1, 0)] - w[(1, 0)] * ab[(0, 0)]]
-        ];
-        let ac_x_w = faer::mat![
-            [ac[(1, 0)] * w[(2, 0)] - ac[(2, 0)] * w[(1, 0)]],
-            [ac[(2, 0)] * w[(0, 0)] - ac[(0, 0)] * w[(2, 0)]],
-            [ac[(0, 0)] * w[(1, 0)] - ac[(1, 0)] * w[(0, 0)]]
-        ];
+        let w_x_ab = w.cross(&ab);
+        let ac_x_w = ac.cross(&w);
 
         let u = w_x_ab * ac2;
         let v = ac_x_w * ab2;
@@ -166,14 +150,9 @@ impl<'a> Geometry<'a> {
     }
 
     pub fn orthonormal_bases(&self, f: &Face) -> [Vector; 2] {
-        let e1_raw = self.vector(f.halfedge.unwrap());
-        let e1 = &e1_raw * (1.0 / (e1_raw.transpose() * &e1_raw)[(0, 0)].sqrt());
+        let e1 = self.vector(f.halfedge.unwrap()).unit();
         let normal = self.face_normal(f).unwrap();
-        let e2 = faer::mat![
-            [normal[(1, 0)] * e1[(2, 0)] - normal[(2, 0)] * e1[(1, 0)]],
-            [normal[(2, 0)] * e1[(0, 0)] - normal[(0, 0)] * e1[(2, 0)]],
-            [normal[(0, 0)] * e1[(1, 0)] - normal[(1, 0)] * e1[(0, 0)]]
-        ];
+        let e2 = normal.cross(&e1);
         [e1, e2]
     }
 
@@ -366,7 +345,7 @@ impl<'a> Geometry<'a> {
         [k1, k2]
     }
 
-    pub fn laplace_matrix(&self) -> SparseMatrix {
+    pub fn build_laplace_matrix<S: Scalar>(&self) -> SparseMatrix<S> {
         let n = self.mesh.vertices.len();
         let mut t = Triplet::new(n, n);
         for v in &self.mesh.vertices {
@@ -376,14 +355,18 @@ impl<'a> Geometry<'a> {
                 let j = self.mesh.halfedges[self.mesh.halfedges[h_idx].twin.expect("Twin should exist")].vertex.expect("Vertex should exist");
                 let weight = (self.cotan(h_idx) + self.cotan(self.mesh.halfedges[h_idx].twin.expect("Twin should exist"))) / 2.0;
                 sum += weight;
-                t.add_entry(-weight, i, j);
+                t.add_entry(S::from_f64(-weight), i, j);
             }
-            t.add_entry(sum, i, i);
+            t.add_entry(S::from_f64(sum), i, i);
         }
         SparseOps::from_triplets(n, n, &t.data)
     }
 
-    pub fn mass_matrix(&self) -> SparseMatrix {
+    pub fn laplace_matrix(&self) -> SparseMatrix<f64> {
+        self.build_laplace_matrix::<f64>()
+    }
+
+    pub fn mass_matrix(&self) -> SparseMatrix<f64> {
         let n = self.mesh.vertices.len();
         let mut t = Triplet::new(n, n);
         for v in &self.mesh.vertices {
@@ -392,20 +375,7 @@ impl<'a> Geometry<'a> {
         SparseOps::from_triplets(n, n, &t.data)
     }
 
-    pub fn complex_laplace_matrix(&self) -> ComplexSparseMatrix {
-        let n = self.mesh.vertices.len();
-        let mut t = ComplexTriplet::new(n, n);
-        for v in &self.mesh.vertices {
-            let i = v.index;
-            let mut sum = 0.0;
-            for h_idx in self.mesh.vertex_adjacent_halfedges(v.index, true) {
-                let j = self.mesh.halfedges[self.mesh.halfedges[h_idx].twin.expect("Twin should exist")].vertex.expect("Vertex should exist");
-                let weight = (self.cotan(h_idx) + self.cotan(self.mesh.halfedges[h_idx].twin.expect("Twin should exist"))) / 2.0;
-                sum += weight;
-                t.add_entry(Complex::new(-weight, 0.0), i, j);
-            }
-            t.add_entry(Complex::new(sum, 0.0), i, i);
-        }
-        SparseOps::from_triplets(n, n, &t.data)
+    pub fn complex_laplace_matrix(&self) -> SparseMatrix<Complex> {
+        self.build_laplace_matrix::<Complex>()
     }
 }

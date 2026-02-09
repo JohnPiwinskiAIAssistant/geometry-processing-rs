@@ -167,17 +167,17 @@ fn test_dense_matrix() {
 fn test_sparse_matrix() {
     use geometry_processing_rs::linear_algebra::{DenseMatrix, SparseMatrix};
     use geometry_processing_rs::linear_algebra::sparse_matrix::{identity, diag, Triplet, Cholesky, LU, QR};
-    let mut triplet = Triplet::new(2, 2);
+    let mut triplet = Triplet::<f64>::new(2, 2);
     triplet.add_entry(1.0, 0, 0);
     triplet.add_entry(2.0, 1, 0);
     triplet.add_entry(3.0, 0, 1);
     triplet.add_entry(4.0, 1, 1);
-    let s = SparseMatrix::from_triplets(2, 2, &triplet.data);
+    let s = SparseMatrix::<f64>::from_triplets(2, 2, &triplet.data);
     let d = s.to_dense();
     assert_eq!(d[(1, 0)], 2.0);
     assert_eq!(d[(0, 1)], 3.0);
 
-    let sid = identity(3, 3);
+    let sid = identity::<f64>(3, 3);
     assert_eq!(sid.get_val(1, 1), 1.0);
     assert_eq!(sid.compute_nnz(), 3);
 
@@ -187,32 +187,32 @@ fn test_sparse_matrix() {
     let st = s.transpose().to_col_major().unwrap();
     assert_eq!(st.get_val(0, 1), 2.0);
 
-    let mut triplet_inv = Triplet::new(2, 2);
+    let mut triplet_inv = Triplet::<f64>::new(2, 2);
     triplet_inv.add_entry(1.0, 0, 0);
     triplet_inv.add_entry(2.0, 1, 1);
-    let s_inv = SparseMatrix::from_triplets(2, 2, &triplet_inv.data);
+    let s_inv = SparseMatrix::<f64>::from_triplets(2, 2, &triplet_inv.data);
     let sinv = s_inv.invert_diagonal();
     assert_eq!(sinv.get_val(1, 1), 0.5);
 
-    let mut triplet_norm = Triplet::new(2, 2);
+    let mut triplet_norm = Triplet::<f64>::new(2, 2);
     triplet_norm.add_entry(3.0, 0, 0);
     triplet_norm.add_entry(4.0, 1, 0);
-    let s_norm = SparseMatrix::from_triplets(2, 2, &triplet_norm.data);
+    let s_norm = SparseMatrix::<f64>::from_triplets(2, 2, &triplet_norm.data);
     assert!((s_norm.frobenius_norm() - 5.0).abs() < 1e-8);
 
     // Solvers
     let b = DenseMatrix::from_fn(2, 1, |_, _| 6.0);
-    let mut triplet_solv = Triplet::new(2, 2);
+    let mut triplet_solv = Triplet::<f64>::new(2, 2);
     triplet_solv.add_entry(3.0, 0, 0);
     triplet_solv.add_entry(3.0, 1, 1);
-    let s_solv = SparseMatrix::from_triplets(2, 2, &triplet_solv.data);
+    let s_solv = SparseMatrix::<f64>::from_triplets(2, 2, &triplet_solv.data);
     
-    let x_chol = Cholesky::new(&s_solv).solve(&b);
+    let x_chol = Cholesky::<f64>::new(&s_solv).solve(&b);
     assert!((x_chol.read(0, 0) - 2.0).abs() < 1e-8);
     
-    let x_lu = LU::new(&s_solv).solve(&b);
+    let x_lu = LU::<f64>::new(&s_solv).solve(&b);
     assert!((x_lu.read(1, 0) - 2.0).abs() < 1e-8);
     
-    let x_qr = QR::new(&s_solv).solve(&b);
+    let x_qr = QR::<f64>::new(&s_solv).solve(&b);
     assert!((x_qr.read(0, 0) - 2.0).abs() < 1e-8);
 }

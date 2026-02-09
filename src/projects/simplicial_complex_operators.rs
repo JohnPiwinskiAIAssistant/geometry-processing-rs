@@ -5,8 +5,8 @@ use crate::linear_algebra::traits::SparseOps;
 
 pub struct SimplicialComplexOperators {
     pub mesh: Mesh,
-    pub a0: SparseMatrix,
-    pub a1: SparseMatrix,
+    pub a0: SparseMatrix<f64>,
+    pub a1: SparseMatrix<f64>,
 }
 
 impl SimplicialComplexOperators {
@@ -16,8 +16,8 @@ impl SimplicialComplexOperators {
         Self { mesh, a0, a1 }
     }
 
-    fn build_vertex_edge_adjacency_matrix(mesh: &Mesh) -> SparseMatrix {
-        let mut t = Triplet::new(mesh.edges.len(), mesh.vertices.len());
+    fn build_vertex_edge_adjacency_matrix(mesh: &Mesh) -> SparseMatrix<f64> {
+        let mut t = Triplet::<f64>::new(mesh.edges.len(), mesh.vertices.len());
         for e in &mesh.edges {
             let h_idx = e.halfedge.expect("Edge should have a halfedge");
             let v1 = mesh.halfedges[h_idx].vertex.expect("Halfedge should have a vertex");
@@ -30,8 +30,8 @@ impl SimplicialComplexOperators {
         SparseOps::from_triplets(mesh.edges.len(), mesh.vertices.len(), &t.data)
     }
 
-    fn build_edge_face_adjacency_matrix(mesh: &Mesh) -> SparseMatrix {
-        let mut t = Triplet::new(mesh.faces.len(), mesh.edges.len());
+    fn build_edge_face_adjacency_matrix(mesh: &Mesh) -> SparseMatrix<f64> {
+        let mut t = Triplet::<f64>::new(mesh.faces.len(), mesh.edges.len());
         for f in &mesh.faces {
             for h_idx in mesh.face_adjacent_halfedges(f.index, true) {
                 let e_idx = mesh.halfedges[h_idx].edge.expect("Halfedge should have an edge");
