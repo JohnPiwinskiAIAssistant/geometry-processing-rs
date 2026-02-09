@@ -8,54 +8,59 @@ impl Distortion {
     pub fn compute_quasi_conformal_error_per_face(p: &[Vector], q: &[Vector]) -> f64 {
         if p.len() < 3 || q.len() < 3 { return 1.0; }
         
-        let u1 = p[1].minus(p[0]);
-        let u2 = p[2].minus(p[0]);
+        let u1 = &p[1] - &p[0];
+        let u2 = &p[2] - &p[0];
 
-        let v1 = q[1].minus(q[0]);
-        let v2 = q[2].minus(q[0]);
+        let v1 = &q[1] - &q[0];
+        let v2 = &q[2] - &q[0];
 
-        let mut e1 = u1;
-        e1.normalize();
-        let mut e2 = u2.minus(e1.times(u2.dot(e1)));
-        e2.normalize();
+        let mut e1 = u1.clone();
+        e1 *= 1.0 / (e1.transpose() * &e1)[(0, 0)].sqrt();
+        let mut e2 = &u2 - &(&e1 * (u2.transpose() * &e1)[(0, 0)]);
+        e2 *= 1.0 / (e2.transpose() * &e2)[(0, 0)].sqrt();
 
-        let mut f1 = v1;
-        f1.normalize();
-        let mut f2 = v2.minus(f1.times(v2.dot(f1)));
-        f2.normalize();
+        let mut f1 = v1.clone();
+        f1 *= 1.0 / (f1.transpose() * &f1)[(0, 0)].sqrt();
+        let mut f2 = &v2 - &(&f1 * (v2.transpose() * &f1)[(0, 0)]);
+        f2 *= 1.0 / (f2.transpose() * &f2)[(0, 0)].sqrt();
 
         let p_proj = [
-            Vector::new(0.0, 0.0, 0.0),
-            Vector::new(u1.dot(e1), u1.dot(e2), 0.0),
-            Vector::new(u2.dot(e1), u2.dot(e2), 0.0),
+            faer::Mat::zeros(3, 1),
+            faer::mat![[(u1.transpose() * &e1)[(0, 0)]], [(u1.transpose() * &e2)[(0, 0)]], [0.0]],
+            faer::mat![[(u2.transpose() * &e1)[(0, 0)]], [(u2.transpose() * &e2)[(0, 0)]], [0.0]],
         ];
 
         let q_proj = [
-            Vector::new(0.0, 0.0, 0.0),
-            Vector::new(v1.dot(f1), v1.dot(f2), 0.0),
-            Vector::new(v2.dot(f1), v2.dot(f2), 0.0),
+            faer::Mat::zeros(3, 1),
+            faer::mat![[(v1.transpose() * &f1)[(0, 0)]], [(v1.transpose() * &f2)[(0, 0)]], [0.0]],
+            faer::mat![[(v2.transpose() * &f1)[(0, 0)]], [(v2.transpose() * &f2)[(0, 0)]], [0.0]],
         ];
 
-        let a_area = 2.0 * u1.cross(u2).norm();
+        let u_cross_v = faer::mat![
+            [u1[(1, 0)] * u2[(2, 0)] - u1[(2, 0)] * u2[(1, 0)]],
+            [u1[(2, 0)] * u2[(0, 0)] - u1[(0, 0)] * u2[(2, 0)]],
+            [u1[(0, 0)] * u2[(1, 0)] - u1[(1, 0)] * u2[(0, 0)]]
+        ];
+        let a_area: f64 = 2.0 * (u_cross_v.transpose() * &u_cross_v)[(0, 0)].sqrt();
         if a_area.abs() < 1e-12 { return 1.0; }
 
-        let mut ss = Vector::new(0.0, 0.0, 0.0);
+        let mut ss = faer::Mat::zeros(3, 1);
         for i in 0..3 {
-            let val = q_proj[i].times(p_proj[(i + 1) % 3].y - p_proj[(i + 2) % 3].y);
-            ss.increment_by(val);
+            let val = &q_proj[i] * (p_proj[(i + 1) % 3][(1, 0)] - p_proj[(i + 2) % 3][(1, 0)]);
+            ss += &val;
         }
-        ss.divide_by(a_area);
+        ss *= 1.0 / a_area;
 
-        let mut st = Vector::new(0.0, 0.0, 0.0);
+        let mut st = faer::Mat::zeros(3, 1);
         for i in 0..3 {
-            let val = q_proj[i].times(p_proj[(i + 2) % 3].x - p_proj[(i + 1) % 3].x);
-            st.increment_by(val);
+            let val = &q_proj[i] * (p_proj[(i + 2) % 3][(0, 0)] - p_proj[(i + 1) % 3][(0, 0)]);
+            st += &val;
         }
-        st.divide_by(a_area);
+        st *= 1.0 / a_area;
 
-        let a = ss.dot(ss);
-        let b = ss.dot(st);
-        let c = st.dot(st);
+        let a = (ss.transpose() * &ss)[(0, 0)];
+        let b = (ss.transpose() * &st)[(0, 0)];
+        let c = (st.transpose() * &st)[(0, 0)];
         let det = ((a - c).powi(2) + 4.0 * b * b).sqrt();
         let mut gamma_large = (0.5 * (a + c + det)).sqrt();
         let mut gamma_small = (0.5 * (a + c - det)).sqrt();
@@ -81,8 +86,8 @@ impl Distortion {
             let mut p = Vec::new();
             let mut q = Vec::new();
             for v_idx in geometry.mesh.face_adjacent_vertices(f.index, true) {
-                p.push(geometry.positions[v_idx]);
-                q.push(*parameterization.get(&v_idx).unwrap_or(&Vector::new(0.0, 0.0, 0.0)));
+                p.push(geometry.positions[v_idx].clone());
+                q.push(parameterization.get(&v_idx).cloned().unwrap_or(faer::Mat::zeros(3, 1)));
             }
 
             let qc_error = Self::compute_quasi_conformal_error_per_face(&p, &q);
@@ -105,9 +110,9 @@ impl Distortion {
             }
 
             let color = hsv((2.0 - 4.0 * (qc_error - 1.0)) / 3.0, 0.7, 0.65);
-            colors[3 * i + 0] = color.x;
-            colors[3 * i + 1] = color.y;
-            colors[3 * i + 2] = color.z;
+            colors[3 * i + 0] = color[(0, 0)];
+            colors[3 * i + 1] = color[(1, 0)];
+            colors[3 * i + 2] = color[(2, 0)];
         }
 
         if total_area.abs() < 1e-12 { return 0.0; }
@@ -116,13 +121,23 @@ impl Distortion {
 
     pub fn compute_area_scaling_per_face(p: &[Vector], q: &[Vector]) -> f64 {
         if p.len() < 3 || q.len() < 3 { return 0.0; }
-        let u1 = p[1].minus(p[0]);
-        let u2 = p[2].minus(p[0]);
-        let big_area = u1.cross(u2).norm();
+        let u1 = &p[1] - &p[0];
+        let u2 = &p[2] - &p[0];
+        let big_area_cp = faer::mat![
+            [u1[(1, 0)] * u2[(2, 0)] - u1[(2, 0)] * u2[(1, 0)]],
+            [u1[(2, 0)] * u2[(0, 0)] - u1[(0, 0)] * u2[(2, 0)]],
+            [u1[(0, 0)] * u2[(1, 0)] - u1[(1, 0)] * u2[(0, 0)]]
+        ];
+        let big_area = (big_area_cp.transpose() * &big_area_cp)[(0, 0)].sqrt();
 
-        let v1 = q[1].minus(q[0]);
-        let v2 = q[2].minus(q[0]);
-        let small_area = v1.cross(v2).norm();
+        let v1 = &q[1] - &q[0];
+        let v2 = &q[2] - &q[0];
+        let small_area_cp = faer::mat![
+            [v1[(1, 0)] * v2[(2, 0)] - v1[(2, 0)] * v2[(1, 0)]],
+            [v1[(2, 0)] * v2[(0, 0)] - v1[(0, 0)] * v2[(2, 0)]],
+            [v1[(0, 0)] * v2[(1, 0)] - v1[(1, 0)] * v2[(0, 0)]]
+        ];
+        let small_area = (small_area_cp.transpose() * &small_area_cp)[(0, 0)].sqrt();
 
         if big_area.abs() < 1e-12 { return 0.0; }
         (small_area / big_area).ln()
@@ -154,5 +169,5 @@ pub fn hsv(h: f64, s: f64, v: f64) -> Vector {
             _ => {}
         }
     }
-    Vector::new(r, g, b)
+    faer::mat![[r], [g], [b]]
 }

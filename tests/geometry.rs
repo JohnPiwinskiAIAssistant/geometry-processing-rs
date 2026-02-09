@@ -1,6 +1,6 @@
 use geometry_processing_rs::core::mesh::Mesh;
 use geometry_processing_rs::core::geometry::Geometry;
-use geometry_processing_rs::linear_algebra::{Vector, DenseMatrix};
+use geometry_processing_rs::linear_algebra::DenseMatrix;
 
 mod common;
 use common::{load_solution, parse_polygon_soup, assert_near, assert_vector_near};
@@ -36,21 +36,21 @@ fn test_geometry() {
         match tokens[0] {
             "barycentricDualArea" => barycentric_dual_areas_sol.push(tokens[1].parse::<f64>().unwrap()),
             "circumcentricDualArea" => circumcentric_dual_areas_sol.push(tokens[1].parse::<f64>().unwrap()),
-            "angleWeightedNormal" => angle_weighted_normals_sol.push(Vector::new(
-                tokens[1].parse().unwrap(), tokens[2].parse().unwrap(), tokens[3].parse().unwrap()
-            )),
-            "sphereInscribedNormal" => sphere_inscribed_normals_sol.push(Vector::new(
-                tokens[1].parse().unwrap(), tokens[2].parse().unwrap(), tokens[3].parse().unwrap()
-            )),
-            "areaWeightedNormal" => area_weighted_normals_sol.push(Vector::new(
-                tokens[1].parse().unwrap(), tokens[2].parse().unwrap(), tokens[3].parse().unwrap()
-            )),
-            "gaussCurvatureNormal" => gauss_curvature_normals_sol.push(Vector::new(
-                tokens[1].parse().unwrap(), tokens[2].parse().unwrap(), tokens[3].parse().unwrap()
-            )),
-            "meanCurvatureNormal" => mean_curvature_normals_sol.push(Vector::new(
-                tokens[1].parse().unwrap(), tokens[2].parse().unwrap(), tokens[3].parse().unwrap()
-            )),
+            "angleWeightedNormal" => angle_weighted_normals_sol.push(faer::mat![
+                [tokens[1].parse::<f64>().unwrap()], [tokens[2].parse::<f64>().unwrap()], [tokens[3].parse::<f64>().unwrap()]
+            ]),
+            "sphereInscribedNormal" => sphere_inscribed_normals_sol.push(faer::mat![
+                [tokens[1].parse::<f64>().unwrap()], [tokens[2].parse::<f64>().unwrap()], [tokens[3].parse::<f64>().unwrap()]
+            ]),
+            "areaWeightedNormal" => area_weighted_normals_sol.push(faer::mat![
+                [tokens[1].parse::<f64>().unwrap()], [tokens[2].parse::<f64>().unwrap()], [tokens[3].parse::<f64>().unwrap()]
+            ]),
+            "gaussCurvatureNormal" => gauss_curvature_normals_sol.push(faer::mat![
+                [tokens[1].parse::<f64>().unwrap()], [tokens[2].parse::<f64>().unwrap()], [tokens[3].parse::<f64>().unwrap()]
+            ]),
+            "meanCurvatureNormal" => mean_curvature_normals_sol.push(faer::mat![
+                [tokens[1].parse::<f64>().unwrap()], [tokens[2].parse::<f64>().unwrap()], [tokens[3].parse::<f64>().unwrap()]
+            ]),
             "scalarGaussCurvature" => scalar_gauss_curvatures_sol.push(tokens[1].parse::<f64>().unwrap()),
             "scalarMeanCurvature" => scalar_mean_curvatures_sol.push(tokens[1].parse::<f64>().unwrap()),
             "k1" => k1_sol.push(tokens[1].parse::<f64>().unwrap()),
@@ -74,19 +74,27 @@ fn test_geometry() {
 
     // Test Normals
     for v in &mesh.vertices {
-        assert_vector_near(angle_weighted_normals_sol[v.index], geometry.vertex_normal_angle_weighted(v), 1e-5);
-        assert_vector_near(sphere_inscribed_normals_sol[v.index], geometry.vertex_normal_sphere_inscribed(v), 1e-5);
-        assert_vector_near(area_weighted_normals_sol[v.index], geometry.vertex_normal_area_weighted(v), 1e-5);
+        assert_vector_near(&angle_weighted_normals_sol[v.index], &geometry.vertex_normal_angle_weighted(v), 1e-5);
+        assert_vector_near(&sphere_inscribed_normals_sol[v.index], &geometry.vertex_normal_sphere_inscribed(v), 1e-5);
+        assert_vector_near(&area_weighted_normals_sol[v.index], &geometry.vertex_normal_area_weighted(v), 1e-5);
         
         let gn = geometry.vertex_normal_gauss_curvature(v);
-        let sol_gn = gauss_curvature_normals_sol[v.index];
-        if gn.minus(sol_gn).norm() > 1e-5 && gn.negated().minus(sol_gn).norm() > 1e-5 {
+        let sol_gn = &gauss_curvature_normals_sol[v.index];
+        let diff1 = &gn - sol_gn;
+        let diff2 = &(-&gn) - sol_gn;
+        let norm1: f64 = (diff1.transpose() * &diff1).read(0, 0).sqrt();
+        let norm2: f64 = (diff2.transpose() * &diff2).read(0, 0).sqrt();
+        if norm1 > 1e-5 && norm2 > 1e-5 {
              panic!("Gauss normal mismatch at vertex {}", v.index);
         }
 
         let mn = geometry.vertex_normal_mean_curvature(v);
-        let sol_mn = mean_curvature_normals_sol[v.index];
-        if mn.minus(sol_mn).norm() > 1e-5 && mn.negated().minus(sol_mn).norm() > 1e-5 {
+        let sol_mn = &mean_curvature_normals_sol[v.index];
+        let dmn1 = &mn - sol_mn;
+        let dmn2 = &(-&mn) - sol_mn;
+        let mnorm1: f64 = (dmn1.transpose() * &dmn1).read(0, 0).sqrt();
+        let mnorm2: f64 = (dmn2.transpose() * &dmn2).read(0, 0).sqrt();
+        if mnorm1 > 1e-5 && mnorm2 > 1e-5 {
              panic!("Mean normal mismatch at vertex {}", v.index);
         }
     }
@@ -106,16 +114,16 @@ fn test_geometry() {
 
     // Test Laplace Matrix
     let laplace = geometry.laplace_matrix();
-    
+    use geometry_processing_rs::linear_algebra::sparse_matrix::SparseMatrixMethods;
     for (val, r, c) in laplace_triplets {
-        assert_near(val, laplace.get(r, c), 1e-5);
+        assert_near(val, laplace.get_val(r, c), 1e-5);
     }
 
     // Test Mass Matrix
     let mass_matrix = geometry.mass_matrix();
-    let ones = DenseMatrix::ones(mesh.vertices.len(), 1);
-    let diag = mass_matrix.times_dense(&ones);
+    let ones = DenseMatrix::from_fn(mesh.vertices.len(), 1, |_, _| 1.0);
+    let diag = &mass_matrix * &ones;
     for i in 0..mesh.vertices.len() {
-        assert_near(mass_sol[i], diag.get(i, 0), 1e-5);
+        assert_near(mass_sol[i], diag[(i, 0)], 1e-5);
     }
 }

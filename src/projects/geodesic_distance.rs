@@ -12,29 +12,37 @@ impl<'a> HeatMethod<'a> {
         let t = geometry.mean_edge_length().powi(2);
         let m = geometry.mass_matrix();
         let a = geometry.laplace_matrix();
-        let f = m.plus(&a.times_real(t));
+        let f = &m + &(&a * t);
         Self { geometry, a, f }
     }
 
     pub fn compute_vector_field(&self, u: &DenseMatrix) -> Vec<Vector> {
-        let mut x = vec![Vector::new(0.0, 0.0, 0.0); self.geometry.mesh.faces.len()];
+        let mut x = vec![faer::Mat::zeros(3, 1); self.geometry.mesh.faces.len()];
         for f in &self.geometry.mesh.faces {
-            let normal = self.geometry.face_normal(f).unwrap_or(Vector::new(0.0, 0.0, 0.0));
+            let normal = self.geometry.face_normal(f).unwrap_or(faer::Mat::zeros(3, 1));
             let area = self.geometry.area(f);
-            let mut grad_u = Vector::new(0.0, 0.0, 0.0);
+            let mut grad_u = faer::Mat::zeros(3, 1);
 
             for h_idx in self.geometry.mesh.face_adjacent_halfedges(f.index, true) {
                 let prev_idx = self.geometry.mesh.halfedges[h_idx].prev.expect("Halfedge should have a prev");
                 let i = self.geometry.mesh.halfedges[prev_idx].vertex.expect("Prev should have a vertex");
-                let ui = u.get(i, 0);
+                let ui = u[(i, 0)];
                 let ei = self.geometry.vector(h_idx);
 
-                grad_u.increment_by(normal.cross(ei).times(ui));
+                let cp = faer::mat![
+                    [normal[(1, 0)] * ei[(2, 0)] - normal[(2, 0)] * ei[(1, 0)]],
+                    [normal[(2, 0)] * ei[(0, 0)] - normal[(0, 0)] * ei[(2, 0)]],
+                    [normal[(0, 0)] * ei[(1, 0)] - normal[(1, 0)] * ei[(0, 0)]]
+                ];
+                grad_u += &cp * ui;
             }
 
-            grad_u.divide_by(2.0 * area);
-            grad_u.normalize();
-            x[f.index] = grad_u.negated();
+            grad_u *= 1.0 / (2.0 * area);
+            let norm = (grad_u.transpose() * &grad_u)[(0, 0)].sqrt();
+            if norm > 0.0 {
+                grad_u *= 1.0 / norm;
+            }
+            x[f.index] = -&grad_u;
         }
         x
     }
@@ -49,7 +57,7 @@ impl<'a> HeatMethod<'a> {
             for h_idx in self.geometry.mesh.vertex_adjacent_halfedges(v.index, true) {
                 if !self.geometry.mesh.halfedges[h_idx].on_boundary {
                     let f_idx = self.geometry.mesh.halfedges[h_idx].face.expect("Halfedge should have a face");
-                    let xj = x[f_idx];
+                    let xj = &x[f_idx];
                     let e1 = self.geometry.vector(h_idx);
                     
                     let prev_idx = self.geometry.mesh.halfedges[h_idx].prev.expect("Halfedge should have a prev");
@@ -59,33 +67,37 @@ impl<'a> HeatMethod<'a> {
                     let cot_theta1 = self.geometry.cotan(h_idx);
                     let cot_theta2 = self.geometry.cotan(prev_idx);
 
-                    sum += cot_theta1 * e1.dot(xj) + cot_theta2 * e2.dot(xj);
+                    let dot1 = (e1.transpose() * xj)[(0, 0)];
+                    let dot2 = (e2.transpose() * xj)[(0, 0)];
+                    sum += cot_theta1 * dot1 + cot_theta2 * dot2;
                 }
             }
 
-            div.set(0.5 * sum, v.index, 0);
+            div[(v.index, 0)] = 0.5 * sum;
         }
         div
     }
 
     fn subtract_minimum_distance(&self, phi: &mut DenseMatrix) {
         let mut min = f64::INFINITY;
-        for i in 0..phi.n_rows() {
-            let val = phi.get(i, 0);
+        for i in 0..phi.nrows() {
+            let val = phi[(i, 0)];
             if val < min { min = val; }
         }
 
-        for i in 0..phi.n_rows() {
-            phi.set(phi.get(i, 0) - min, i, 0);
+        for i in 0..phi.nrows() {
+            phi[(i, 0)] -= min;
         }
     }
 
     pub fn compute(&self, delta: &DenseMatrix) -> DenseMatrix {
-        let u = self.f.chol().solve_positive_definite(delta);
+        let llt = crate::linear_algebra::Cholesky::new(&self.f);
+        let u = llt.solve_positive_definite(delta);
         let x = self.compute_vector_field(&u);
         let div = self.compute_divergence(&x);
         
-        let mut phi = self.a.chol().solve_positive_definite(&div.negated());
+        let llt_a = crate::linear_algebra::Cholesky::new(&self.a);
+        let mut phi = llt_a.solve_positive_definite(&-div);
         self.subtract_minimum_distance(&mut phi);
         phi
     }

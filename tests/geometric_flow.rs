@@ -29,18 +29,18 @@ fn parse_flow_solution(content: &str) -> FlowSolution {
             "steps" => steps = tokens[1].parse().unwrap(),
             "h" => h = tokens[1].parse().unwrap(),
             "mcf" => {
-                mcf_positions.push(Vector::new(
-                    tokens[1].parse().unwrap(),
-                    tokens[2].parse().unwrap(),
-                    tokens[3].parse().unwrap(),
-                ));
+                mcf_positions.push(faer::mat![
+                    [tokens[1].parse::<f64>().unwrap()],
+                    [tokens[2].parse::<f64>().unwrap()],
+                    [tokens[3].parse::<f64>().unwrap()],
+                ]);
             }
             "mmcf" => {
-                mmcf_positions.push(Vector::new(
-                    tokens[1].parse().unwrap(),
-                    tokens[2].parse().unwrap(),
-                    tokens[3].parse().unwrap(),
-                ));
+                mmcf_positions.push(faer::mat![
+                    [tokens[1].parse::<f64>().unwrap()],
+                    [tokens[2].parse::<f64>().unwrap()],
+                    [tokens[3].parse::<f64>().unwrap()],
+                ]);
             }
             _ => {}
         }
@@ -69,8 +69,9 @@ fn test_geometric_flow() {
         } // flow dropped here
 
         for i in 0..sol.mcf_positions.len() {
-            let diff = geometry.positions[i].minus(sol.mcf_positions[i]);
-            assert!(diff.norm() < 1e-4, "MCF mismatch at vertex {}: got {:?}, expected {:?}", i, geometry.positions[i], sol.mcf_positions[i]);
+            let diff_mat = &geometry.positions[i] - &sol.mcf_positions[i];
+            let diff: f64 = (diff_mat.transpose() * &diff_mat).read(0, 0).sqrt();
+            assert!(diff < 1e-4, "MCF mismatch at vertex {}: got {:?}, expected {:?}", i, geometry.positions[i], sol.mcf_positions[i]);
         }
     }
 
@@ -85,8 +86,9 @@ fn test_geometric_flow() {
         } // flow dropped here
 
         for i in 0..sol.mmcf_positions.len() {
-            let diff = geometry.positions[i].minus(sol.mmcf_positions[i]);
-            assert!(diff.norm() < 1e-4, "MMCF mismatch at vertex {}: got {:?}, expected {:?}", i, geometry.positions[i], sol.mmcf_positions[i]);
+            let diff_mat = &geometry.positions[i] - &sol.mmcf_positions[i];
+            let diff: f64 = (diff_mat.transpose() * &diff_mat).read(0, 0).sqrt();
+            assert!(diff < 1e-4, "MMCF mismatch at vertex {}: got {:?}, expected {:?}", i, geometry.positions[i], sol.mmcf_positions[i]);
         }
     }
 }

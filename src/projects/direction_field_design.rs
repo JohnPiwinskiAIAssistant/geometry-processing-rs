@@ -24,7 +24,7 @@ impl<'a> TrivialConnections<'a> {
         let mut tc = Self {
             geometry,
             bases,
-            p_mat: SparseMatrix::identity(0, 0), // stub
+            p_mat: crate::linear_algebra::sparse_matrix::identity(0, 0), // stub
             a_mat: hodge_decomp.a,
             hodge1: hodge_decomp.hodge1,
             d0: hodge_decomp.d0,
@@ -46,14 +46,14 @@ impl<'a> TrivialConnections<'a> {
                 for &h_idx in generator {
                     let e_idx = self.geometry.mesh.halfedges[h_idx].edge.expect("Halfedge should have an edge");
                     let sign = if self.geometry.mesh.edges[e_idx].halfedge == Some(h_idx) { 1.0 } else { -1.0 };
-                    sum += sign * basis.get(e_idx, 0);
+                    sum += sign * basis[(e_idx, 0)];
                 }
-
                 t.add_entry(sum, i, j);
             }
         }
 
-        SparseMatrix::from_triplet(t)
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        SparseMatrix::from_triplets(n, n, &t.data)
     }
 
     pub fn satisfy_gauss_bonnet(&self, singularity: &[f64]) -> bool {
@@ -66,25 +66,25 @@ impl<'a> TrivialConnections<'a> {
         let mut rhs = DenseMatrix::zeros(v_count, 1);
         for i in 0..v_count {
             let u = -self.geometry.angle_defect(&self.geometry.mesh.vertices[i]) + 2.0 * std::f64::consts::PI * singularity[i];
-            rhs.set(u, i, 0);
+            rhs[(i, 0)] = u;
         }
 
-        let llt = self.a_mat.chol();
+        let llt = crate::linear_algebra::Cholesky::new(&self.a_mat);
         let beta_tilde = llt.solve_positive_definite(&rhs);
 
-        self.hodge1.times_dense(&self.d0.times_dense(&beta_tilde))
+        &self.hodge1 * &(&self.d0 * &beta_tilde)
     }
 
     pub fn transport_no_rotation(&self, h_idx: usize, alpha_i: f64) -> f64 {
         let u = self.geometry.vector(h_idx);
         let f_idx = self.geometry.mesh.halfedges[h_idx].face.expect("Should have face");
         let [e1, e2] = self.geometry.orthonormal_bases(&self.geometry.mesh.faces[f_idx]);
-        let theta_ij = u.dot(e2).atan2(u.dot(e1));
+        let theta_ij = (u.transpose() * &e2)[(0, 0)].atan2((u.transpose() * &e1)[(0, 0)]);
 
         let twin_idx = self.geometry.mesh.halfedges[h_idx].twin.expect("Should have twin");
         let g_idx = self.geometry.mesh.halfedges[twin_idx].face.expect("Should have face");
         let [f1, f2] = self.geometry.orthonormal_bases(&self.geometry.mesh.faces[g_idx]);
-        let theta_ji = u.dot(f2).atan2(u.dot(f1));
+        let theta_ji = (u.transpose() * &f2)[(0, 0)].atan2((u.transpose() * &f1)[(0, 0)]);
 
         alpha_i - theta_ij + theta_ji
     }
@@ -93,7 +93,6 @@ impl<'a> TrivialConnections<'a> {
         let n = self.bases.len();
         let e_count = self.geometry.mesh.edges.len();
         let mut gamma = DenseMatrix::zeros(e_count, 1);
-
         if n > 0 {
             let mut rhs = DenseMatrix::zeros(n, 1);
             for i in 0..n {
@@ -105,22 +104,22 @@ impl<'a> TrivialConnections<'a> {
                     let sign = if self.geometry.mesh.edges[e_idx].halfedge == Some(h_idx) { 1.0 } else { -1.0 };
 
                     sum += self.transport_no_rotation(h_idx, 0.0);
-                    sum -= sign * delta_beta.get(e_idx, 0);
+                    sum -= sign * delta_beta[(e_idx, 0)];
                 }
 
                 while sum < -std::f64::consts::PI { sum += 2.0 * std::f64::consts::PI; }
                 while sum >= std::f64::consts::PI { sum -= 2.0 * std::f64::consts::PI; }
 
-                rhs.set(sum, i, 0);
+                rhs[(i, 0)] = sum;
             }
 
-            let lu = self.p_mat.lu();
+            let lu = crate::linear_algebra::LU::new(&self.p_mat);
             let z = lu.solve_square(&rhs);
 
             for i in 0..n {
                 let basis = &self.bases[i];
-                let zi = z.get(i, 0);
-                gamma.increment_by(&basis.times_real(zi));
+                let zi = z[(i, 0)];
+                gamma += basis * zi;
             }
         }
 
@@ -130,6 +129,6 @@ impl<'a> TrivialConnections<'a> {
     pub fn compute_connections(&self, singularity: &[f64]) -> DenseMatrix {
         let delta_beta = self.compute_co_exact_component(singularity);
         let gamma = self.compute_harmonic_component(&delta_beta);
-        delta_beta.plus(&gamma)
+        delta_beta + gamma
     }
 }

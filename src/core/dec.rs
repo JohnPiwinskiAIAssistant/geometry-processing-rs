@@ -11,7 +11,8 @@ impl DEC {
             let area = geometry.barycentric_dual_area(v);
             triplet.add_entry(area, v.index, v.index);
         }
-        SparseMatrix::from_triplet(triplet)
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        SparseMatrix::from_triplets(v_count, v_count, &triplet.data)
     }
 
     pub fn build_hodge_star_1_form(geometry: &Geometry) -> SparseMatrix {
@@ -23,7 +24,8 @@ impl DEC {
             let w = (geometry.cotan(h_idx) + geometry.cotan(twin_idx)) / 2.0;
             triplet.add_entry(w, e.index, e.index);
         }
-        SparseMatrix::from_triplet(triplet)
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        SparseMatrix::from_triplets(e_count, e_count, &triplet.data)
     }
 
     pub fn build_hodge_star_2_form(geometry: &Geometry) -> SparseMatrix {
@@ -33,7 +35,8 @@ impl DEC {
             let area = geometry.area(f);
             triplet.add_entry(1.0 / area, f.index, f.index);
         }
-        SparseMatrix::from_triplet(triplet)
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        SparseMatrix::from_triplets(f_count, f_count, &triplet.data)
     }
 
     pub fn build_exterior_derivative_0_form(geometry: &Geometry) -> SparseMatrix {
@@ -50,7 +53,8 @@ impl DEC {
             triplet.add_entry(1.0, e.index, j);
             triplet.add_entry(-1.0, e.index, k);
         }
-        SparseMatrix::from_triplet(triplet)
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        SparseMatrix::from_triplets(e_count, v_count, &triplet.data)
     }
 
     pub fn build_exterior_derivative_1_form(geometry: &Geometry) -> SparseMatrix {
@@ -64,6 +68,7 @@ impl DEC {
                 triplet.add_entry(sign, f.index, e_idx);
             }
         }
-        SparseMatrix::from_triplet(triplet)
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        SparseMatrix::from_triplets(f_count, e_count, &triplet.data)
     }
 }

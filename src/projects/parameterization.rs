@@ -1,5 +1,6 @@
 use crate::core::geometry::Geometry;
-use crate::linear_algebra::{DenseMatrix, SparseMatrix, ComplexSparseMatrix, Complex, Vector, ComplexTriplet};
+use crate::linear_algebra::{DenseMatrix, SparseMatrix, ComplexSparseMatrix, Vector, ComplexTriplet};
+use num_complex::Complex64;
 use crate::utils::solvers::Solvers;
 use std::collections::HashMap;
 
@@ -14,10 +15,11 @@ impl<'a> SpectralConformalParameterization<'a> {
 
     pub fn build_conformal_energy(&self) -> ComplexSparseMatrix {
         let mut ed = self.geometry.complex_laplace_matrix();
-        ed.scale_by(Complex::new(0.5, 0.0));
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        ed = ed.scale(Complex64::new(0.5, 0.0));
 
-        let i_img = Complex::new(0.0, 1.0);
-        let n = ed.n_rows();
+        let i_img = Complex64::new(0.0, 1.0);
+        let n = ed.nrows();
         let mut t = ComplexTriplet::new(n, n);
         for b in &self.geometry.mesh.boundaries {
             let start = b.halfedge.expect("Boundary should have halfedge");
@@ -28,26 +30,26 @@ impl<'a> SpectralConformalParameterization<'a> {
                 let twin_idx = self.geometry.mesh.halfedges[h_idx].twin.expect("Should have twin");
                 let twin_v_idx = self.geometry.mesh.halfedges[twin_idx].vertex.expect("Should have vertex");
 
-                t.add_entry(i_img.times_real(0.25), v_idx, twin_v_idx);
-                t.add_entry(i_img.times_real(-0.25), twin_v_idx, v_idx);
+                t.add_entry(i_img * 0.25, v_idx, twin_v_idx);
+                t.add_entry(i_img * -0.25, twin_v_idx, v_idx);
 
                 curr = self.geometry.mesh.halfedges[curr].next.expect("Next should exist");
                 if curr == start { break; }
             }
         }
 
-        let a = ComplexSparseMatrix::from_triplet(t);
-        ed.minus(&a)
+        let a = ComplexSparseMatrix::from_triplets(n, n, &t.data);
+        &ed - &a
     }
 
     pub fn flatten(&self) -> Vec<Vector> {
         let ec = self.build_conformal_energy();
         let z = Solvers::solve_inverse_power_method(&ec);
         
-        let mut flattening = vec![Vector::new(0.0, 0.0, 0.0); self.geometry.mesh.vertices.len()];
+        let mut flattening = vec![faer::Mat::zeros(3, 1); self.geometry.mesh.vertices.len()];
         for i in 0..self.geometry.mesh.vertices.len() {
-            let zi = z.get(i, 0);
-            flattening[i] = Vector::new(zi.re(), zi.im(), 0.0);
+            let zi = z.read(i, 0);
+            flattening[i] = faer::mat![[zi.re], [zi.im], [0.0]];
         }
 
         self.normalize_flattening(&mut flattening);
@@ -58,21 +60,21 @@ impl<'a> SpectralConformalParameterization<'a> {
         let n = flattening.len();
         if n == 0 { return; }
         
-        let mut cm = Vector::new(0.0, 0.0, 0.0);
+        let mut cm = faer::Mat::zeros(3, 1);
         for p in flattening.iter() {
-            cm.increment_by(*p);
+            cm += p;
         }
-        cm.divide_by(n as f64);
+        cm *= 1.0 / (n as f64);
 
         let mut radius: f64 = -1.0;
         for p in flattening.iter_mut() {
-            p.decrement_by(cm);
-            radius = radius.max(p.norm());
+            *p -= &cm;
+            radius = radius.max((p.transpose() * &*p)[(0, 0)].sqrt());
         }
 
         if radius > 0.0 {
             for p in flattening.iter_mut() {
-                p.divide_by(radius);
+                *p *= 1.0 / radius;
             }
         }
     }
@@ -104,10 +106,10 @@ impl<'a> BoundaryFirstFlattening<'a> {
             k_gaussian: DenseMatrix::zeros(0, 0),
             k_geodesic: DenseMatrix::zeros(0, 0),
             l_lengths: DenseMatrix::zeros(0, 0),
-            a_ii: SparseMatrix::identity(0, 0),
-            a_ib: SparseMatrix::identity(0, 0),
-            a_bb: SparseMatrix::identity(0, 0),
-            a_full: SparseMatrix::identity(0, 0),
+            a_ii: crate::linear_algebra::sparse_matrix::identity(0, 0),
+            a_ib: crate::linear_algebra::sparse_matrix::identity(0, 0),
+            a_bb: crate::linear_algebra::sparse_matrix::identity(0, 0),
+            a_full: crate::linear_algebra::sparse_matrix::identity(0, 0),
         };
 
         bff.index_vertices();
@@ -117,6 +119,7 @@ impl<'a> BoundaryFirstFlattening<'a> {
         let a = bff.build_special_laplace();
         bff.a_full = a;
         
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
         bff.a_ii = bff.a_full.sub_matrix(0, bff.n_i, 0, bff.n_i);
         bff.a_ib = bff.a_full.sub_matrix(0, bff.n_i, bff.n_i, bff.n_v);
         bff.a_bb = bff.a_full.sub_matrix(bff.n_i, bff.n_v, bff.n_i, bff.n_v);
@@ -148,11 +151,11 @@ impl<'a> BoundaryFirstFlattening<'a> {
             let ad = self.geometry.angle_defect(v);
             if self.geometry.mesh.on_boundary(v.index) {
                 if let Some(&bi) = self.b_vertex_index.get(&v.index) {
-                    self.k_geodesic.set(ad, bi, 0);
+                    self.k_geodesic[(bi, 0)] = ad;
                 }
             } else {
                 if let Some(&i) = self.vertex_index.get(&v.index) {
-                    self.k_gaussian.set(ad, i, 0);
+                    self.k_gaussian[(i, 0)] = ad;
                 }
             }
         }
@@ -169,7 +172,7 @@ impl<'a> BoundaryFirstFlattening<'a> {
             let v_idx = self.geometry.mesh.halfedges[h_idx].vertex.expect("Vertex should exist");
             if let Some(&bi) = self.b_vertex_index.get(&v_idx) {
                 let e_idx = self.geometry.mesh.halfedges[h_idx].edge.expect("Edge should exist");
-                self.l_lengths.set(self.geometry.length(e_idx), bi, 0);
+                self.l_lengths[(bi, 0)] = self.geometry.length(e_idx);
             }
             curr = self.geometry.mesh.halfedges[curr].next.expect("Next should exist");
             if curr == start { break; }
@@ -191,19 +194,20 @@ impl<'a> BoundaryFirstFlattening<'a> {
             }
             t.add_entry(sum, i, i);
         }
-        SparseMatrix::from_triplet(t)
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        SparseMatrix::from_triplets(self.n_v, self.n_v, &t.data)
     }
 
     pub fn flatten(&self, target: &DenseMatrix, given_scale_factors: bool) -> Vec<Vector> {
         let (u, ktilde) = if given_scale_factors {
             let u = target.clone();
-            let h = self.dirichlet_to_neumann(&self.k_gaussian.negated(), &u);
-            let ktilde = self.k_geodesic.minus(&h);
+            let h = self.dirichlet_to_neumann(&-target, &u);
+            let ktilde = &self.k_geodesic - h;
             (u, ktilde)
         } else {
             let ktilde = target.clone();
-            let h = self.k_geodesic.minus(&ktilde);
-            let u = self.neumann_to_dirichlet(&self.k_gaussian.negated(), &h);
+            let h = &self.k_geodesic - &ktilde;
+            let u = self.neumann_to_dirichlet(&-&self.k_gaussian, &h);
             (u, ktilde)
         };
 
@@ -211,22 +215,24 @@ impl<'a> BoundaryFirstFlattening<'a> {
     }
 
     fn dirichlet_to_neumann(&self, phi: &DenseMatrix, g: &DenseMatrix) -> DenseMatrix {
-        let llt = self.a_ii.chol();
-        let rhs = phi.minus(&self.a_ib.times_dense(g));
+        let llt = crate::linear_algebra::Cholesky::new(&self.a_ii);
+        let rhs = phi - &(&self.a_ib * g);
         let a = llt.solve_positive_definite(&rhs);
-        self.a_ib.transpose().times_dense(&a).plus(&self.a_bb.times_dense(g)).negated()
+        let first = &self.a_ib.transpose() * &a;
+        let second = &self.a_bb * g;
+        -(first + second)
     }
 
     fn neumann_to_dirichlet(&self, phi: &DenseMatrix, h: &DenseMatrix) -> DenseMatrix {
-        let llt = self.a_full.chol();
-        let rhs = phi.vcat(&h.negated());
+        let llt = crate::linear_algebra::Cholesky::new(&self.a_full);
+        let rhs = faer::concat![[phi], [-h]];
         let a = llt.solve_positive_definite(&rhs);
-        a.sub_matrix(self.n_i, self.n_v, 0, 1)
+        a.submatrix(self.n_i, 0, self.n_v - self.n_i, 1).to_owned()
     }
 
     fn flatten_with_sf_and_curvatures(&self, u: &DenseMatrix, ktilde: &DenseMatrix) -> Vec<Vector> {
         let _u = u;
         let _kt = ktilde;
-        vec![Vector::new(0.0, 0.0, 0.0); self.n_v]
+        vec![faer::Mat::zeros(3, 1); self.n_v]
     }
 }

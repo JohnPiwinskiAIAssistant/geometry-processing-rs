@@ -26,7 +26,8 @@ impl SimplicialComplexOperators {
             t.add_entry(1.0, e.index, v1);
             t.add_entry(1.0, e.index, v2);
         }
-        SparseMatrix::from_triplet(t)
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        SparseMatrix::from_triplets(mesh.edges.len(), mesh.vertices.len(), &t.data)
     }
 
     fn build_edge_face_adjacency_matrix(mesh: &Mesh) -> SparseMatrix {
@@ -37,13 +38,14 @@ impl SimplicialComplexOperators {
                 t.add_entry(1.0, f.index, e_idx);
             }
         }
-        SparseMatrix::from_triplet(t)
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        SparseMatrix::from_triplets(mesh.faces.len(), mesh.edges.len(), &t.data)
     }
 
     pub fn build_vertex_vector(&self, subset: &MeshSubset) -> DenseMatrix {
         let mut v = DenseMatrix::zeros(self.mesh.vertices.len(), 1);
         for &v_idx in &subset.vertices {
-            v.set(1.0, v_idx, 0);
+            v[(v_idx, 0)] = 1.0;
         }
         v
     }
@@ -51,7 +53,7 @@ impl SimplicialComplexOperators {
     pub fn build_edge_vector(&self, subset: &MeshSubset) -> DenseMatrix {
         let mut v = DenseMatrix::zeros(self.mesh.edges.len(), 1);
         for &e_idx in &subset.edges {
-            v.set(1.0, e_idx, 0);
+            v[(e_idx, 0)] = 1.0;
         }
         v
     }
@@ -59,7 +61,7 @@ impl SimplicialComplexOperators {
     pub fn build_face_vector(&self, subset: &MeshSubset) -> DenseMatrix {
         let mut v = DenseMatrix::zeros(self.mesh.faces.len(), 1);
         for &f_idx in &subset.faces {
-            v.set(1.0, f_idx, 0);
+            v[(f_idx, 0)] = 1.0;
         }
         v
     }
@@ -67,16 +69,16 @@ impl SimplicialComplexOperators {
     pub fn star(&self, subset: &MeshSubset) -> MeshSubset {
         let mut res = subset.clone();
         
-        let edge_vector = self.a0.times_dense(&self.build_vertex_vector(subset));
+        let edge_vector = &self.a0 * &self.build_vertex_vector(subset);
         for i in 0..self.mesh.edges.len() {
-            if edge_vector.get(i, 0) != 0.0 {
+            if edge_vector[(i, 0)] != 0.0 {
                 res.add_edge(i);
             }
         }
 
-        let face_vector = self.a1.times_dense(&self.build_edge_vector(&res));
+        let face_vector = &self.a1 * &self.build_edge_vector(&res);
         for i in 0..self.mesh.faces.len() {
-            if face_vector.get(i, 0) != 0.0 {
+            if face_vector[(i, 0)] != 0.0 {
                 res.add_face(i);
             }
         }
@@ -87,16 +89,16 @@ impl SimplicialComplexOperators {
     pub fn closure(&self, subset: &MeshSubset) -> MeshSubset {
         let mut res = subset.clone();
         
-        let edge_vector = self.a1.transpose().times_dense(&self.build_face_vector(subset));
+        let edge_vector = &self.a1.transpose().to_col_major().unwrap() * &self.build_face_vector(subset);
         for i in 0..self.mesh.edges.len() {
-            if edge_vector.get(i, 0) != 0.0 {
+            if edge_vector[(i, 0)] != 0.0 {
                 res.add_edge(i);
             }
         }
 
-        let vertex_vector = self.a0.transpose().times_dense(&self.build_edge_vector(&res));
+        let vertex_vector = &self.a0.transpose().to_col_major().unwrap() * &self.build_edge_vector(&res);
         for i in 0..self.mesh.vertices.len() {
-            if vertex_vector.get(i, 0) != 0.0 {
+            if vertex_vector[(i, 0)] != 0.0 {
                 res.add_vertex(i);
             }
         }
@@ -121,16 +123,16 @@ impl SimplicialComplexOperators {
     pub fn boundary(&self, subset: &MeshSubset) -> MeshSubset {
         let mut boundary = MeshSubset::new();
         if !subset.faces.is_empty() {
-            let face_edges = self.a1.transpose().times_dense(&self.build_face_vector(subset));
+            let face_edges = &self.a1.transpose().to_col_major().unwrap() * &self.build_face_vector(subset);
             for i in 0..self.mesh.edges.len() {
-                if face_edges.get(i, 0) == 1.0 {
+                if face_edges[(i, 0)] == 1.0 {
                     boundary.add_edge(i);
                 }
             }
         } else if !subset.edges.is_empty() {
-            let edge_vertices = self.a0.transpose().times_dense(&self.build_edge_vector(subset));
+            let edge_vertices = &self.a0.transpose().to_col_major().unwrap() * &self.build_edge_vector(subset);
             for i in 0..self.mesh.vertices.len() {
-                if edge_vertices.get(i, 0) == 1.0 {
+                if edge_vertices[(i, 0)] == 1.0 {
                     boundary.add_vertex(i);
                 }
             }

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::fs;
 use std::path::PathBuf;
 use geometry_processing_rs::core::mesh::PolygonSoup;
@@ -34,7 +35,7 @@ pub fn parse_polygon_soup(solution: &str) -> PolygonSoup {
                     let x = tokens[1].parse::<f64>().unwrap();
                     let y = tokens[2].parse::<f64>().unwrap();
                     let z = tokens[3].parse::<f64>().unwrap();
-                    positions.push(Vector::new(x, y, z));
+                    positions.push(faer::mat![[x], [y], [z]]);
                 }
             }
             "f" => {
@@ -55,7 +56,8 @@ pub fn assert_near(a: f64, b: f64, eps: f64) {
     assert!((a - b).abs() < eps, "Value {} not near {} (diff: {})", a, b, (a - b).abs());
 }
 
-pub fn assert_vector_near(a: Vector, b: Vector, eps: f64) {
-    let diff = a.minus(b).norm();
+pub fn assert_vector_near(a: &Vector, b: &Vector, eps: f64) {
+    let diff_mat = a - b;
+    let diff: f64 = (diff_mat.transpose() * &diff_mat).read(0, 0).sqrt();
     assert!(diff < eps, "Vector {:?} not near {:?} (diff: {})", a, b, diff);
 }

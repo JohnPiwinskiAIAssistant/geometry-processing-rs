@@ -14,7 +14,7 @@ impl<'a> DiscreteCurvatures<'a> {
         let v_count = self.geometry.mesh.vertices.len();
         let mut res = DenseMatrix::zeros(v_count, 1);
         for v in &self.geometry.mesh.vertices {
-            res.set(self.geometry.scalar_gauss_curvature(v), v.index, 0);
+            res[(v.index, 0)] = self.geometry.scalar_gauss_curvature(v);
         }
         res
     }
@@ -23,7 +23,7 @@ impl<'a> DiscreteCurvatures<'a> {
         let v_count = self.geometry.mesh.vertices.len();
         let mut res = DenseMatrix::zeros(v_count, 1);
         for v in &self.geometry.mesh.vertices {
-            res.set(self.geometry.scalar_mean_curvature(v), v.index, 0);
+            res[(v.index, 0)] = self.geometry.scalar_mean_curvature(v);
         }
         res
     }
@@ -43,7 +43,7 @@ impl<'a> DiscreteCurvatures<'a> {
                 "Gauss Curvature" => self.geometry.vertex_normal_gauss_curvature(v),
                 "Mean Curvature" => self.geometry.vertex_normal_mean_curvature(v),
                 "Sphere Inscribed" => self.geometry.vertex_normal_sphere_inscribed(v),
-                _ => Vector::new(0.0, 0.0, 0.0),
+                _ => faer::Mat::zeros(3, 1),
             }
         }).collect()
     }

@@ -12,8 +12,8 @@ impl<'a, 'b> MeanCurvatureFlow<'a, 'b> {
 
     pub fn build_flow_operator(&self, m: &SparseMatrix, h: f64) -> SparseMatrix {
         let a = self.geometry.laplace_matrix();
-        // F = M + hA
-        m.plus(&a.times_real(h))
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        m + &a.scale(h)
     }
 
     pub fn integrate(&mut self, h: f64) {
@@ -25,25 +25,25 @@ impl<'a, 'b> MeanCurvatureFlow<'a, 'b> {
         let mut f0 = DenseMatrix::zeros(v_count, 3);
         for v in &self.geometry.mesh.vertices {
             let i = v.index;
-            let p = self.geometry.positions[i];
+            let p = &self.geometry.positions[i];
 
-            f0.set(p.x, i, 0);
-            f0.set(p.y, i, 1);
-            f0.set(p.z, i, 2);
+            f0[(i, 0)] = p[(0, 0)];
+            f0[(i, 1)] = p[(1, 0)];
+            f0[(i, 2)] = p[(2, 0)];
         }
 
-        let rhs = m.times_dense(&f0);
+        let rhs = &m * &f0;
 
         // solve linear system (M + hA)fh = Mf0
-        let llt = f.chol();
+        let llt = crate::linear_algebra::Cholesky::new(&f);
         let fh = llt.solve_positive_definite(&rhs);
 
         // update positions
         for v in &self.geometry.mesh.vertices {
             let i = v.index;
-            self.geometry.positions[i].x = fh.get(i, 0);
-            self.geometry.positions[i].y = fh.get(i, 1);
-            self.geometry.positions[i].z = fh.get(i, 2);
+            self.geometry.positions[i][(0, 0)] = fh[(i, 0)];
+            self.geometry.positions[i][(1, 0)] = fh[(i, 1)];
+            self.geometry.positions[i][(2, 0)] = fh[(i, 2)];
         }
 
         // center mesh positions around origin
@@ -63,8 +63,8 @@ impl<'a, 'b> ModifiedMeanCurvatureFlow<'a, 'b> {
     }
 
     pub fn build_flow_operator(&self, m: &SparseMatrix, h: f64) -> SparseMatrix {
-        // F = M + hA
-        m.plus(&self.laplace.times_real(h))
+        use crate::linear_algebra::sparse_matrix::SparseMatrixMethods;
+        m + &self.laplace.scale(h)
     }
 
     pub fn integrate(&mut self, h: f64) {
@@ -75,23 +75,23 @@ impl<'a, 'b> ModifiedMeanCurvatureFlow<'a, 'b> {
         let mut f0 = DenseMatrix::zeros(v_count, 3);
         for v in &self.geometry.mesh.vertices {
             let i = v.index;
-            let p = self.geometry.positions[i];
+            let p = &self.geometry.positions[i];
 
-            f0.set(p.x, i, 0);
-            f0.set(p.y, i, 1);
-            f0.set(p.z, i, 2);
+            f0[(i, 0)] = p[(0, 0)];
+            f0[(i, 1)] = p[(1, 0)];
+            f0[(i, 2)] = p[(2, 0)];
         }
 
-        let rhs = m.times_dense(&f0);
+        let rhs = &m * &f0;
 
-        let llt = f.chol();
+        let llt = crate::linear_algebra::Cholesky::new(&f);
         let fh = llt.solve_positive_definite(&rhs);
 
         for v in &self.geometry.mesh.vertices {
             let i = v.index;
-            self.geometry.positions[i].x = fh.get(i, 0);
-            self.geometry.positions[i].y = fh.get(i, 1);
-            self.geometry.positions[i].z = fh.get(i, 2);
+            self.geometry.positions[i][(0, 0)] = fh[(i, 0)];
+            self.geometry.positions[i][(1, 0)] = fh[(i, 1)];
+            self.geometry.positions[i][(2, 0)] = fh[(i, 2)];
         }
 
         self.geometry.normalize(false);

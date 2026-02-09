@@ -1,5 +1,4 @@
 use crate::linear_algebra::Vector;
-use crate::utils::distortion::hsv;
 
 pub struct Colormap;
 
@@ -19,13 +18,13 @@ impl Colormap {
         if i >= values.len() { i = values.len() - 1; }
         let i = i - 1;
 
-        let c1 = Vector::new(values[i].1[0], values[i].1[1], values[i].1[2]);
-        let c2 = Vector::new(values[i+1].1[0], values[i+1].1[1], values[i+1].1[2]);
+        let c1 = faer::mat![[values[i].1[0]], [values[i].1[1]], [values[i].1[2]]];
+        let c2 = faer::mat![[values[i+1].1[0]], [values[i+1].1[1]], [values[i+1].1[2]]];
         
         let denom = (values[i].0 - values[i+1].0).abs();
         let scaling = if denom > 1e-12 { (x - values[i].0) / denom } else { 0.0 };
 
-        c1.plus(c2.minus(c1).times(scaling))
+        &c1 + &(c2 - &c1) * scaling
     }
 
     pub fn seismic_data() -> Vec<(f64, [f64; 3])> {

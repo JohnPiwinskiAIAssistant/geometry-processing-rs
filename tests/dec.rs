@@ -61,48 +61,49 @@ fn test_dec() {
 
     // HodgeStar0Form
     let h_star0 = DEC::build_hodge_star_0_form(&geometry);
-    let h_star0_res = h_star0.times_dense(&DenseMatrix::ones(v_count, 1));
+    let h_star0_res = &h_star0 * &DenseMatrix::from_fn(v_count, 1, |_, _| 1.0);
     for i in 0..v_count {
-        assert!((h_star0_res.get(i, 0) - sol.hodge0[i]).abs() < 1e-6);
+        assert!((h_star0_res[(i, 0)] - sol.hodge0[i]).abs() < 1e-6);
     }
 
     // HodgeStar1Form
     let h_star1 = DEC::build_hodge_star_1_form(&geometry);
-    let h_star1_res = h_star1.times_dense(&DenseMatrix::ones(e_count, 1));
+    let h_star1_res = &h_star1 * &DenseMatrix::from_fn(e_count, 1, |_, _| 1.0);
     for i in 0..e_count {
-        assert!((h_star1_res.get(i, 0) - sol.hodge1[i]).abs() < 1e-6);
+        assert!((h_star1_res[(i, 0)] - sol.hodge1[i]).abs() < 1e-6);
     }
 
     // HodgeStar2Form
     let h_star2 = DEC::build_hodge_star_2_form(&geometry);
-    let h_star2_res = h_star2.times_dense(&DenseMatrix::ones(f_count, 1));
+    let h_star2_res = &h_star2 * &DenseMatrix::from_fn(f_count, 1, |_, _| 1.0);
     for i in 0..f_count {
-        assert!((h_star2_res.get(i, 0) - sol.hodge2[i]).abs() < 1e-3);
+        assert!((h_star2_res[(i, 0)] - sol.hodge2[i]).abs() < 1e-3);
     }
 
     // ExteriorDerivative0Form
     let d0 = DEC::build_exterior_derivative_0_form(&geometry);
     let mut phi_vec = DenseMatrix::zeros(v_count, 1);
-    for i in 0..v_count { phi_vec.set(sol.phi[i], i, 0); }
-    let d_phi_res = d0.times_dense(&phi_vec);
+    for i in 0..v_count { phi_vec[(i, 0)] = sol.phi[i]; }
+    let d_phi_res = &d0 * &phi_vec;
     for i in 0..e_count {
-        let diff = d_phi_res.get(i, 0) - sol.d_phi[i];
-        let diff_neg = d_phi_res.get(i, 0) + sol.d_phi[i];
+        let diff = d_phi_res[(i, 0)] - sol.d_phi[i];
+        let diff_neg = d_phi_res[(i, 0)] + sol.d_phi[i];
         assert!(diff.abs() < 1e-6 || diff_neg.abs() < 1e-6);
     }
 
     // ExteriorDerivative1Form
     let d1 = DEC::build_exterior_derivative_1_form(&geometry);
     let mut omega_vec = DenseMatrix::zeros(e_count, 1);
-    for i in 0..e_count { omega_vec.set(sol.omega[i], i, 0); }
-    let d_omega_res = d1.times_dense(&omega_vec);
+    for i in 0..e_count { omega_vec[(i, 0)] = sol.omega[i]; }
+    let d_omega_res = &d1 * &omega_vec;
     for i in 0..f_count {
-        let diff = d_omega_res.get(i, 0) - sol.d_omega[i];
-        let diff_neg = d_omega_res.get(i, 0) + sol.d_omega[i];
+        let diff = d_omega_res[(i, 0)] - sol.d_omega[i];
+        let diff_neg = d_omega_res[(i, 0)] + sol.d_omega[i];
         assert!(diff.abs() < 1e-6 || diff_neg.abs() < 1e-6);
     }
 
     // d1 * d0 = 0
-    let d1d0 = d1.times_sparse(&d0);
+    let d1d0 = &d1 * &d0;
+    use geometry_processing_rs::linear_algebra::sparse_matrix::SparseMatrixMethods;
     assert!(d1d0.frobenius_norm() < 1e-6);
 }

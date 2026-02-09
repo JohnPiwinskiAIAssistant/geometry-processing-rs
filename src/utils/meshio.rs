@@ -1,5 +1,4 @@
-use crate::linear_algebra::Vector;
-use crate::core::mesh::{Mesh, PolygonSoup};
+use crate::linear_algebra::PolygonSoup;
 
 pub struct MeshIO;
 
@@ -22,7 +21,7 @@ impl MeshIO {
                         let x = tokens[1].parse::<f64>().ok()?;
                         let y = tokens[2].parse::<f64>().ok()?;
                         let z = tokens[3].parse::<f64>().ok()?;
-                        positions.push(Vector::new(x, y, z));
+                        positions.push(faer::mat![[x], [y], [z]]);
                     }
                 }
                 "f" => {
@@ -48,7 +47,7 @@ impl MeshIO {
 
         // Write positions
         for p in &polygon_soup.v {
-            output.push_str(&format!("v {} {} {}\n", p.x, p.y, p.z));
+            output.push_str(&format!("v {} {} {}\n", p[(0, 0)], p[(1, 0)], p[(2, 0)]));
         }
 
         // Write indices

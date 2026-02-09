@@ -26,11 +26,11 @@ fn parse_poisson_solution(content: &str, v_count: usize) -> PoissonSolution {
 
         match tokens[0] {
             "rho" => {
-                rho.set(tokens[1].parse().unwrap(), rho_idx, 0);
+                rho[(rho_idx, 0)] = tokens[1].parse().unwrap();
                 rho_idx += 1;
             }
             "phi" => {
-                phi_sol.set(tokens[1].parse().unwrap(), phi_idx, 0);
+                phi_sol[(phi_idx, 0)] = tokens[1].parse().unwrap();
                 phi_idx += 1;
             }
             _ => {}
@@ -54,6 +54,6 @@ fn test_poisson_problem() {
     let phi = scalar_poisson_problem.solve(&sol.rho);
 
     for i in 0..mesh.vertices.len() {
-        assert!((phi.get(i, 0) - sol.phi_sol.get(i, 0)).abs() < 1e-3, "Poisson solution mismatch at vertex {}: got {}, expected {}", i, phi.get(i, 0), sol.phi_sol.get(i, 0));
+        assert!((phi[(i, 0)] - sol.phi_sol[(i, 0)]).abs() < 1e-3, "Poisson solution mismatch at vertex {}: got {}, expected {}", i, phi[(i, 0)], sol.phi_sol[(i, 0)]);
     }
 }

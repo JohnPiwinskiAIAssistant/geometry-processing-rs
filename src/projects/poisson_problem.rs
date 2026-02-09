@@ -17,16 +17,16 @@ impl<'a> ScalarPoissonProblem<'a> {
     }
 
     pub fn solve(&self, rho: &DenseMatrix) -> DenseMatrix {
-        let v_count = self.m.n_rows();
-        let total_rho = self.m.times_dense(rho).sum();
+        let v_count = self.m.nrows();
+        let total_rho = (&self.m * rho).sum();
         
         let rho_bar_val = total_rho / self.total_area;
-        let rho_bar = DenseMatrix::constant(rho_bar_val, v_count, 1);
+        let rho_bar = DenseMatrix::from_fn(v_count, 1, |_, _| rho_bar_val);
         
         // rhs = M * (rho_bar - rho)
-        let rhs = self.m.times_dense(&rho_bar.minus(rho));
+        let rhs = &self.m * &(rho_bar - rho);
 
-        let llt = self.a.chol();
+        let llt = crate::linear_algebra::Cholesky::new(&self.a);
         llt.solve_positive_definite(&rhs)
     }
 }

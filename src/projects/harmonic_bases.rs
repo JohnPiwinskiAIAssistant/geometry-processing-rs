@@ -17,7 +17,7 @@ impl<'a> HarmonicBases<'a> {
         for &h_idx in generator {
             let e_idx = self.geometry.mesh.halfedges[h_idx].edge.expect("Halfedge should have an edge");
             let sign = if self.geometry.mesh.edges[e_idx].halfedge == Some(h_idx) { 1.0 } else { -1.0 };
-            omega.set(sign, e_idx, 0);
+            omega[(e_idx, 0)] = sign;
         }
         omega
     }
@@ -27,7 +27,7 @@ impl<'a> HarmonicBases<'a> {
         for generator in &self.geometry.mesh.generators {
             let omega = self.build_closed_primal_one_form(generator);
             let d_alpha = hodge_decomposition.compute_exact_component(&omega);
-            gammas.push(omega.minus(&d_alpha));
+            gammas.push(omega - d_alpha);
         }
         gammas
     }

@@ -2,6 +2,7 @@ use geometry_processing_rs::core::mesh::{Mesh};
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::projects::parameterization::{SpectralConformalParameterization};
 use geometry_processing_rs::linear_algebra::{Complex, ComplexTriplet, ComplexSparseMatrix, Vector};
+use num_complex::Complex64;
 
 mod common;
 use common::{load_solution, parse_polygon_soup};
@@ -13,7 +14,7 @@ struct ParameterizationSolution {
 
 fn parse_parameterization_solution(content: &str, v_count: usize) -> ParameterizationSolution {
     let mut t = ComplexTriplet::new(v_count, v_count);
-    let mut uv_sol = vec![Vector::new(0.0, 0.0, 0.0); v_count];
+    let mut uv_sol = vec![faer::Mat::zeros(3, 1); v_count];
 
     let mut uv_idx = 0;
 
@@ -32,19 +33,20 @@ fn parse_parameterization_solution(content: &str, v_count: usize) -> Parameteriz
                 );
             }
             "uv" => {
-                uv_sol[uv_idx] = Vector::new(
-                    tokens[1].parse().unwrap(),
-                    tokens[2].parse().unwrap(),
-                    0.0,
-                );
+                uv_sol[uv_idx] = faer::mat![
+                    [tokens[1].parse::<f64>().unwrap()],
+                    [tokens[2].parse::<f64>().unwrap()],
+                    [0.0],
+                ];
                 uv_idx += 1;
             }
             _ => {}
         }
     }
 
+    use geometry_processing_rs::linear_algebra::sparse_matrix::SparseMatrixMethods;
     ParameterizationSolution {
-        ec_sol: ComplexSparseMatrix::from_triplet(t),
+        ec_sol: ComplexSparseMatrix::from_triplets(v_count, v_count, &t.data),
         uv_sol,
     }
 }
@@ -69,49 +71,51 @@ fn test_parameterization() {
     }
     let ec = scp.build_conformal_energy();
     
+    use geometry_processing_rs::linear_algebra::sparse_matrix::SparseMatrixMethods;
     // Debug: check norms and NNZ
-    println!("EC norm: {}, NNZ: {}", ec.frobenius_norm(), ec.nnz());
-    println!("Sol EC norm: {}, NNZ: {}", sol.ec_sol.frobenius_norm(), sol.ec_sol.nnz());
+    println!("EC norm: {}, NNZ: {}", ec.frobenius_norm(), ec.compute_nnz());
+    println!("Sol EC norm: {}, NNZ: {}", sol.ec_sol.frobenius_norm(), sol.ec_sol.compute_nnz());
     
     let mut ed = geometry.complex_laplace_matrix();
-    ed.scale_by(Complex::new(0.5, 0.0));
+    ed = ed.scale(Complex64::new(0.5, 0.0));
     println!("My ED norm: {}", ed.frobenius_norm());
     
     // Extract real part from sol.ec_sol
     let mut sol_ed_triplet = ComplexTriplet::new(mesh.vertices.len(), mesh.vertices.len());
-    let sol_values = sol.ec_sol.mat.values();
-    for j in 0..sol.ec_sol.n_cols() {
-        let start = sol.ec_sol.mat.col_ptrs()[j];
-        let end = sol.ec_sol.mat.col_ptrs()[j+1];
+    let sol_values = sol.ec_sol.values();
+    for j in 0..sol.ec_sol.ncols() {
+        let start = sol.ec_sol.col_ptrs()[j];
+        let end = sol.ec_sol.col_ptrs()[j+1];
         for k in start..end {
-            sol_ed_triplet.add_entry(Complex::new(sol_values.re[k], 0.0), sol.ec_sol.mat.row_indices()[k], j);
+            sol_ed_triplet.add_entry(Complex64::new(sol_values.re[k], 0.0), sol.ec_sol.row_indices()[k], j);
         }
     }
-    let sol_ed = ComplexSparseMatrix::from_triplet(sol_ed_triplet);
+    let sol_ed = ComplexSparseMatrix::from_triplets(mesh.vertices.len(), mesh.vertices.len(), &sol_ed_triplet.data);
     println!("Sol ED norm: {}", sol_ed.frobenius_norm());
     
-    let a = ec.minus(&ed);
+    let a = &ec - &ed;
     println!("My A norm: {}", a.frobenius_norm());
     
     // Extract imag part from sol.ec_sol
     let mut sol_a_triplet = ComplexTriplet::new(mesh.vertices.len(), mesh.vertices.len());
-    for j in 0..sol.ec_sol.n_cols() {
-        let start = sol.ec_sol.mat.col_ptrs()[j];
-        let end = sol.ec_sol.mat.col_ptrs()[j+1];
+    for j in 0..sol.ec_sol.ncols() {
+        let start = sol.ec_sol.col_ptrs()[j];
+        let end = sol.ec_sol.col_ptrs()[j+1];
         for k in start..end {
-            sol_a_triplet.add_entry(Complex::new(0.0, sol_values.im[k]), sol.ec_sol.mat.row_indices()[k], j);
+            sol_a_triplet.add_entry(Complex64::new(0.0, sol_values.im[k]), sol.ec_sol.row_indices()[k], j);
         }
     }
-    let sol_a = ComplexSparseMatrix::from_triplet(sol_a_triplet);
+    let sol_a = ComplexSparseMatrix::from_triplets(mesh.vertices.len(), mesh.vertices.len(), &sol_a_triplet.data);
     println!("Sol A norm: {}", sol_a.frobenius_norm());
-
-    let total_diff = sol.ec_sol.minus(&ec).frobenius_norm();
+    
+    let total_diff = (&sol.ec_sol - &ec).frobenius_norm();
     assert!(total_diff < 1e-6, "Conformal energy matrix mismatch: norm = {}", total_diff);
 
     // flatten
     let uv = scp.flatten();
     for i in 0..mesh.vertices.len() {
-        let diff = uv[i].minus(sol.uv_sol[i]);
-        assert!(diff.norm() < 1.0, "Flattening mismatch at vertex {}: got {:?}, expected {:?}", i, uv[i], sol.uv_sol[i]);
+        let diff_mat = &uv[i] - &sol.uv_sol[i];
+        let diff: f64 = (diff_mat.transpose() * &diff_mat).read(0, 0).sqrt();
+        assert!(diff < 1.0, "Flattening mismatch at vertex {}: got {:?}, expected {:?}", i, uv[i], sol.uv_sol[i]);
     }
 }
