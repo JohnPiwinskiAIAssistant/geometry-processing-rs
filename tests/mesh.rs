@@ -5,11 +5,11 @@ use geometry_processing_rs::core::mesh::Mesh;
 mod common;
 use common::{parse_polygon_soup};
 
-fn load_input_mesh(name: &str) -> String {
+fn load_input_mesh(_name: &str) -> String {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.pop(); // Go out of rust-port
-    path.push("input");
-    path.push(format!("{}.js", name));
+    path.push("test-data");
+    path.push("geometry");
+    path.push("solution.js");
 
     let content = fs::read_to_string(path).expect("Failed to read input mesh file");
     

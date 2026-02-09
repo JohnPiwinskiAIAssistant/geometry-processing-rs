@@ -5,8 +5,7 @@ use geometry_processing_rs::linear_algebra::Vector;
 
 pub fn load_solution(project: &str) -> String {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.pop(); // Go out of rust-port
-    path.push("tests");
+    path.push("test-data");
     path.push(project);
     path.push("solution.js");
 
