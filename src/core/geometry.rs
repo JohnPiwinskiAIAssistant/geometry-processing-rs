@@ -38,7 +38,7 @@ impl<'a> Geometry<'a> {
         let mut radius = -1.0f64;
         for i in 0..n {
             self.positions[i] -= &cm;
-            radius = radius.max((self.positions[i].transpose() * &self.positions[i])[(0, 0)].sqrt());
+            radius = radius.max(self.positions[i].norm());
         }
 
         if rescale && radius > 0.0 {
@@ -56,7 +56,7 @@ impl<'a> Geometry<'a> {
     }
 
     pub fn length(&self, e_idx: usize) -> f64 {
-        (self.vector(self.mesh.edges[e_idx].halfedge.unwrap()).transpose() * &self.vector(self.mesh.edges[e_idx].halfedge.unwrap()))[(0, 0)].sqrt()
+        self.vector(self.mesh.edges[e_idx].halfedge.unwrap()).norm()
     }
 
     pub fn midpoint(&self, e_idx: usize) -> Vector {
@@ -82,13 +82,8 @@ impl<'a> Geometry<'a> {
         let u = self.vector(h_idx);
         let v = -&self.vector(self.mesh.halfedges[h_idx].prev.unwrap());
         
-        // cross product for Mat<f64> (3x1)
-        let cp = faer::mat![
-            [u[(1, 0)] * v[(2, 0)] - u[(2, 0)] * v[(1, 0)]],
-            [u[(2, 0)] * v[(0, 0)] - u[(0, 0)] * v[(2, 0)]],
-            [u[(0, 0)] * v[(1, 0)] - u[(1, 0)] * v[(0, 0)]]
-        ];
-        0.5 * (cp.transpose() * &cp)[(0, 0)].sqrt()
+        let cp = u.cross(&v);
+        0.5 * cp.norm()
     }
 
     pub fn total_area(&self) -> f64 {
@@ -159,10 +154,10 @@ impl<'a> Geometry<'a> {
     pub fn angle(&self, c: &Corner) -> f64 {
         let h_idx = c.halfedge.unwrap();
         let u_raw = self.vector(self.mesh.halfedges[h_idx].prev.unwrap());
-        let u = &u_raw * (1.0 / (u_raw.transpose() * &u_raw)[(0, 0)].sqrt());
+        let u = &u_raw * (1.0 / u_raw.norm());
         let v_raw = -&self.vector(self.mesh.halfedges[h_idx].next.unwrap());
-        let v = &v_raw * (1.0 / (v_raw.transpose() * &v_raw)[(0, 0)].sqrt());
-        let dot = (u.transpose() * v)[(0, 0)];
+        let v = &v_raw * (1.0 / v_raw.norm());
+        let dot = u.dot(&v);
         dot.clamp(-1.0, 1.0).acos()
     }
 
@@ -175,12 +170,8 @@ impl<'a> Geometry<'a> {
         let u = self.vector(h.prev.unwrap());
         let v = -&self.vector(h.next.unwrap());
         let dot = (u.transpose() * &v)[(0, 0)];
-        let cp = faer::mat![
-            [u[(1, 0)] * v[(2, 0)] - u[(2, 0)] * v[(1, 0)]],
-            [u[(2, 0)] * v[(0, 0)] - u[(0, 0)] * v[(2, 0)]],
-            [u[(0, 0)] * v[(1, 0)] - u[(1, 0)] * v[(0, 0)]]
-        ];
-        dot / (cp.transpose() * &cp)[(0, 0)].sqrt()
+        let cp = u.cross(&v);
+        dot / cp.norm()
     }
 
     pub fn dihedral_angle(&self, h_idx: usize) -> f64 {
@@ -193,15 +184,11 @@ impl<'a> Geometry<'a> {
         let n1 = self.face_normal(&self.mesh.faces[h.face.unwrap()]).unwrap();
         let n2 = self.face_normal(&self.mesh.faces[twin.face.unwrap()]).unwrap();
         let w_raw = self.vector(h_idx);
-        let w = &w_raw * (1.0 / (w_raw.transpose() * &w_raw)[(0, 0)].sqrt());
+        let w = &w_raw * (1.0 / w_raw.norm());
 
-        let cos_theta = (n1.transpose() * &n2)[(0, 0)];
-        let cp = faer::mat![
-            [n1[(1, 0)] * n2[(2, 0)] - n1[(2, 0)] * n2[(1, 0)]],
-            [n1[(2, 0)] * n2[(0, 0)] - n1[(0, 0)] * n2[(2, 0)]],
-            [n1[(0, 0)] * n2[(1, 0)] - n1[(1, 0)] * n2[(0, 0)]]
-        ];
-        let sin_theta = (cp.transpose() * w)[(0, 0)];
+        let cos_theta = n1.dot(&n2);
+        let cp = n1.cross(&n2);
+        let sin_theta = cp.dot(&w);
 
         sin_theta.atan2(cos_theta)
     }
@@ -217,8 +204,8 @@ impl<'a> Geometry<'a> {
     pub fn circumcentric_dual_area(&self, v: &Vertex) -> f64 {
         let mut area = 0.0;
         for h_idx in self.mesh.vertex_adjacent_halfedges(v.index, true) {
-            let u2 = { let u = self.vector(self.mesh.halfedges[h_idx].prev.unwrap()); (u.transpose() * &u)[(0, 0)] };
-            let v2 = { let v = self.vector(h_idx); (v.transpose() * &v)[(0, 0)] };
+            let u2 = self.vector(self.mesh.halfedges[h_idx].prev.unwrap()).norm_sq();
+            let v2 = self.vector(h_idx).norm_sq();
             let cot_alpha = self.cotan(self.mesh.halfedges[h_idx].prev.unwrap());
             let cot_beta = self.cotan(h_idx);
 
@@ -232,7 +219,7 @@ impl<'a> Geometry<'a> {
         for f_idx in self.mesh.vertex_adjacent_faces(v.index, true) {
             n += &self.face_normal(&self.mesh.faces[f_idx]).unwrap();
         }
-        let norm = (n.transpose() * &n)[(0, 0)].sqrt();
+        let norm = n.norm();
         &n * (1.0 / norm)
     }
 
@@ -243,7 +230,7 @@ impl<'a> Geometry<'a> {
             let area = self.area(&self.mesh.faces[f_idx]);
             n += &normal * area;
         }
-        let norm = (n.transpose() * &n)[(0, 0)].sqrt();
+        let norm = n.norm();
         &n * (1.0 / norm)
     }
 
@@ -255,7 +242,7 @@ impl<'a> Geometry<'a> {
             let angle = self.angle(c);
             n += &normal * angle;
         }
-        let norm = (n.transpose() * &n)[(0, 0)].sqrt();
+        let norm = n.norm();
         &n * (1.0 / norm)
     }
 
@@ -265,7 +252,7 @@ impl<'a> Geometry<'a> {
             let weight = 0.5 * self.dihedral_angle(h_idx) / self.length(self.mesh.halfedges[h_idx].edge.unwrap());
             n -= &self.vector(h_idx) * weight;
         }
-        let norm = (n.transpose() * &n)[(0, 0)].sqrt();
+        let norm = n.norm();
         &n * (1.0 / norm)
     }
 
@@ -275,7 +262,7 @@ impl<'a> Geometry<'a> {
             let weight = 0.5 * (self.cotan(h_idx) + self.cotan(self.mesh.halfedges[h_idx].twin.unwrap()));
             n -= &self.vector(h_idx) * weight;
         }
-        let norm = (n.transpose() * &n)[(0, 0)].sqrt();
+        let norm = n.norm();
         &n * (1.0 / norm)
     }
 
@@ -286,16 +273,12 @@ impl<'a> Geometry<'a> {
             let u = self.vector(self.mesh.halfedges[c.halfedge.unwrap()].prev.unwrap());
             let v_vec = -&self.vector(self.mesh.halfedges[c.halfedge.unwrap()].next.unwrap());
             
-            let cp = faer::mat![
-                [u[(1, 0)] * v_vec[(2, 0)] - u[(2, 0)] * v_vec[(1, 0)]],
-                [u[(2, 0)] * v_vec[(0, 0)] - u[(0, 0)] * v_vec[(2, 0)]],
-                [u[(0, 0)] * v_vec[(1, 0)] - u[(1, 0)] * v_vec[(0, 0)]]
-            ];
-            let u2 = (u.transpose() * &u)[(0, 0)];
-            let v2 = (v_vec.transpose() * &v_vec)[(0, 0)];
+            let cp = u.cross(&v_vec);
+            let u2 = u.norm_sq();
+            let v2 = v_vec.norm_sq();
             n += &cp * (1.0 / (u2 * v2));
         }
-        let norm = (n.transpose() * &n)[(0, 0)].sqrt();
+        let norm = n.norm();
         &n * (1.0 / norm)
     }
 
