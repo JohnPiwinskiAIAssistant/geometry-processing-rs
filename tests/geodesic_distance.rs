@@ -1,4 +1,4 @@
-use geometry_processing_rs::core::mesh::{Mesh};
+use geometry_processing_rs::core::mesh::{Mesh, MeshBackend, Vertex, Face};
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::projects::geodesic_distance::{HeatMethod};
 use geometry_processing_rs::linear_algebra::{DenseMatrix, Vector, Cholesky};
@@ -68,7 +68,7 @@ fn test_geodesic_distance() {
     mesh.build(&soup);
     let geometry = Geometry::new(&mesh, soup.v, false);
     
-    let sol = parse_geodesic_solution(&solution_data, mesh.vertices.len(), mesh.faces.len());
+    let sol = parse_geodesic_solution(&solution_data, mesh.num_vertices(), mesh.num_faces());
 
     let heat_method = HeatMethod::new(&geometry);
     
@@ -77,14 +77,14 @@ fn test_geodesic_distance() {
     let u = llt.solve(&sol.delta);
     println!("u min: {}, u max: {}", (0..u.nrows()).map(|i| u[(i, 0)]).fold(f64::INFINITY, f64::min), (0..u.nrows()).map(|i| u[(i, 0)]).fold(f64::NEG_INFINITY, f64::max));
     let x = heat_method.compute_vector_field(&u);
-    for i in 0..mesh.faces.len() {
+    for i in 0..mesh.num_faces() {
         let diff_mat = &x[i] - &sol.x_sol[i];
         let diff: f64 = (diff_mat.transpose() * &diff_mat).read(0, 0).sqrt();
         if diff >= 1e-5 {
             println!("Face {}: x={:?}, expected={:?}", i, x[i], sol.x_sol[i]);
-            let normal = geometry.face_normal(&mesh.faces[i]).unwrap();
+            let normal = geometry.face_normal(&Face::new(i)).unwrap();
             println!("Normal: {:?}", normal);
-            let area = geometry.area(&mesh.faces[i]);
+            let area = geometry.area(&Face::new(i));
             println!("Area: {}", area);
         }
         assert!(diff < 1e-5, "Vector field mismatch at face {}: got {:?}, expected {:?}", i, x[i], sol.x_sol[i]);
@@ -92,13 +92,13 @@ fn test_geodesic_distance() {
 
     // computeDivergence
     let div = heat_method.compute_divergence(&x);
-    for i in 0..mesh.vertices.len() {
+    for i in 0..mesh.num_vertices() {
         assert!((div[(i, 0)] - sol.div_sol[(i, 0)]).abs() < 1e-5, "Divergence mismatch at vertex {}: got {}, expected {}", i, div[(i, 0)], sol.div_sol[(i, 0)]);
     }
 
     // compute
     let phi = heat_method.compute(&sol.delta);
-    for i in 0..mesh.vertices.len() {
+    for i in 0..mesh.num_vertices() {
         assert!((phi[(i, 0)] - sol.phi_sol[(i, 0)]).abs() < 1e-5, "Geodesic distance mismatch at vertex {}: got {}, expected {}", i, phi[(i, 0)], sol.phi_sol[(i, 0)]);
     }
 }

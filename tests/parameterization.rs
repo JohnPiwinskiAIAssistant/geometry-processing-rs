@@ -1,8 +1,8 @@
-use geometry_processing_rs::core::mesh::{Mesh};
+use geometry_processing_rs::core::mesh::{Mesh, MeshBackend, Vertex};
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::projects::parameterization::{SpectralConformalParameterization};
 use geometry_processing_rs::linear_algebra::{Complex, Triplet, SparseMatrix, Vector};
-use geometry_processing_rs::linear_algebra::traits::{SparseOps, Scalar};
+use geometry_processing_rs::linear_algebra::traits::{SparseOps, Scalar, DenseMatrixOps};
 use num_complex::Complex64;
 
 mod common;
@@ -60,13 +60,13 @@ fn test_parameterization() {
     mesh.build(&soup);
     let geometry = Geometry::new(&mesh, soup.v, false);
     
-    let sol = parse_parameterization_solution(&solution_data, mesh.vertices.len());
+    let sol = parse_parameterization_solution(&solution_data, mesh.num_vertices());
 
     let scp = SpectralConformalParameterization::new(&geometry);
     
-    println!("Number of boundaries: {}", geometry.mesh.boundaries.len());
-    for (i, b) in geometry.mesh.boundaries.iter().enumerate() {
-        let count = geometry.mesh.face_adjacent_halfedges(b.index, true).count();
+    println!("Number of boundaries: {}", geometry.mesh.num_boundaries());
+    for i in 0..geometry.mesh.num_boundaries() {
+        let count = geometry.mesh.boundary_adjacent_halfedges(i, true).count();
         println!("Boundary {} has {} edges", i, count);
     }
     let ec = scp.build_conformal_energy();
@@ -80,7 +80,8 @@ fn test_parameterization() {
     println!("My ED norm: {}", ed.frobenius_norm());
     
     // Extract real part from sol.ec_sol
-    let mut sol_ed_triplet = Triplet::<Complex>::new(mesh.vertices.len(), mesh.vertices.len());
+    let n_v = mesh.num_vertices();
+    let mut sol_ed_triplet = Triplet::<Complex>::new(n_v, n_v);
     for j in 0..sol.ec_sol.ncols() {
         let start = sol.ec_sol.col_ptrs()[j];
         let end = sol.ec_sol.col_ptrs()[j+1];
@@ -89,14 +90,14 @@ fn test_parameterization() {
             sol_ed_triplet.add_entry(Complex64::new(val.re, 0.0), sol.ec_sol.row_indices()[k], j);
         }
     }
-    let sol_ed = SparseMatrix::<Complex>::from_triplets(mesh.vertices.len(), mesh.vertices.len(), &sol_ed_triplet.data);
+    let sol_ed = SparseMatrix::<Complex>::from_triplets(n_v, n_v, &sol_ed_triplet.data);
     println!("Sol ED norm: {}", sol_ed.frobenius_norm());
     
     let a = &ec - &ed;
     println!("My A norm: {}", a.frobenius_norm());
     
     // Extract imag part from sol.ec_sol
-    let mut sol_a_triplet = Triplet::<Complex>::new(mesh.vertices.len(), mesh.vertices.len());
+    let mut sol_a_triplet = Triplet::<Complex>::new(n_v, n_v);
     for j in 0..sol.ec_sol.ncols() {
         let start = sol.ec_sol.col_ptrs()[j];
         let end = sol.ec_sol.col_ptrs()[j+1];
@@ -105,7 +106,7 @@ fn test_parameterization() {
             sol_a_triplet.add_entry(Complex64::new(0.0, val.im), sol.ec_sol.row_indices()[k], j);
         }
     }
-    let sol_a = SparseMatrix::<Complex>::from_triplets(mesh.vertices.len(), mesh.vertices.len(), &sol_a_triplet.data);
+    let sol_a = SparseMatrix::<Complex>::from_triplets(n_v, n_v, &sol_a_triplet.data);
     println!("Sol A norm: {}", sol_a.frobenius_norm());
     
     let total_diff = (&sol.ec_sol - &ec).frobenius_norm();
@@ -113,7 +114,7 @@ fn test_parameterization() {
 
     // flatten
     let uv = scp.flatten();
-    for i in 0..mesh.vertices.len() {
+    for i in 0..mesh.num_vertices() {
         let diff_mat = &uv[i] - &sol.uv_sol[i];
         let diff: f64 = (diff_mat.transpose() * &diff_mat).read(0, 0).sqrt();
         assert!(diff < 1.0, "Flattening mismatch at vertex {}: got {:?}, expected {:?}", i, uv[i], sol.uv_sol[i]);

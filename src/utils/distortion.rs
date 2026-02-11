@@ -1,5 +1,6 @@
 use crate::linear_algebra::Vector;
 use crate::core::geometry::Geometry;
+use crate::core::mesh::{MeshBackend, Face};
 use std::collections::HashMap;
 
 pub struct Distortion;
@@ -73,43 +74,44 @@ impl Distortion {
         gamma_large / gamma_small
     }
 
-    pub fn compute_quasi_conformal_error(
+    pub fn compute_quasi_conformal_error<B: MeshBackend>(
         colors: &mut Vec<f64>,
         parameterization: &HashMap<usize, Vector>,
-        geometry: &Geometry
+        geometry: &Geometry<B>
     ) -> f64 {
         let mut total_area = 0.0;
         let mut total_qc_error = 0.0;
         let mut qc_errors = HashMap::new();
 
-        for f in &geometry.mesh.faces {
+        let num_faces = geometry.mesh.num_faces();
+        for f_idx in 0..num_faces {
             let mut p = Vec::new();
             let mut q = Vec::new();
-            for v_idx in geometry.mesh.face_adjacent_vertices(f.index, true) {
+            for v_idx in geometry.mesh.face_adjacent_vertices(f_idx, true) {
                 p.push(geometry.positions[v_idx].clone());
                 q.push(parameterization.get(&v_idx).cloned().unwrap_or(faer::Mat::zeros(3, 1)));
             }
 
             let qc_error = Self::compute_quasi_conformal_error_per_face(&p, &q);
-            let area = geometry.area(f);
+            let area = geometry.area(&Face::new(f_idx));
             total_area += area;
             total_qc_error += qc_error * area;
-            qc_errors.insert(f.index, qc_error.max(1.0).min(1.5));
+            qc_errors.insert(f_idx, qc_error.max(1.0).min(1.5));
         }
 
-        for v in &geometry.mesh.vertices {
-            let i = v.index;
-            let mut qc_error = 0.0;
+        let num_vertices = geometry.mesh.num_vertices();
+        for i in 0..num_vertices {
+            let mut qc_error_sum = 0.0;
             let mut count = 0;
-            for f_idx in geometry.mesh.vertex_adjacent_faces(v.index, true) {
-                qc_error += qc_errors.get(&f_idx).cloned().unwrap_or(1.0);
+            for f_idx in geometry.mesh.vertex_adjacent_faces(i, true) {
+                qc_error_sum += qc_errors.get(&f_idx).cloned().unwrap_or(1.0);
                 count += 1;
             }
             if count > 0 {
-                qc_error /= count as f64;
+                qc_error_sum /= count as f64;
             }
 
-            let color = hsv((2.0 - 4.0 * (qc_error - 1.0)) / 3.0, 0.7, 0.65);
+            let color = hsv((2.0 - 4.0 * (qc_error_sum - 1.0)) / 3.0, 0.7, 0.65);
             colors[3 * i + 0] = color[(0, 0)];
             colors[3 * i + 1] = color[(1, 0)];
             colors[3 * i + 2] = color[(2, 0)];

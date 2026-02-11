@@ -1,16 +1,17 @@
 use crate::core::geometry::Geometry;
+use crate::core::mesh::{MeshBackend, Vertex};
 use crate::linear_algebra::{DenseMatrix, SparseMatrix, Vector, Triplet, Cholesky, Complex};
-use crate::linear_algebra::traits::{Scalar, SparseOps, LinearSolver, DenseMatrixOps};
+use crate::linear_algebra::traits::{SparseOps, LinearSolver};
 use num_complex::Complex64;
 use crate::utils::solvers::Solvers;
 use std::collections::HashMap;
 
-pub struct SpectralConformalParameterization<'a> {
-    pub geometry: &'a Geometry<'a>,
+pub struct SpectralConformalParameterization<'a, B: MeshBackend> {
+    pub geometry: &'a Geometry<'a, B>,
 }
 
-impl<'a> SpectralConformalParameterization<'a> {
-    pub fn new(geometry: &'a Geometry<'a>) -> Self {
+impl<'a, B: MeshBackend> SpectralConformalParameterization<'a, B> {
+    pub fn new(geometry: &'a Geometry<'a, B>) -> Self {
         Self { geometry }
     }
 
@@ -21,19 +22,20 @@ impl<'a> SpectralConformalParameterization<'a> {
         let i_img = Complex64::new(0.0, 1.0);
         let n = ed.nrows();
         let mut t = Triplet::<Complex>::new(n, n);
-        for b in &self.geometry.mesh.boundaries {
-            let start = b.halfedge.expect("Boundary should have halfedge");
+        let num_boundaries = self.geometry.mesh.num_boundaries();
+        for b_idx in 0..num_boundaries {
+            let start = self.geometry.mesh.backend.boundary_halfedge(b_idx).expect("Boundary should have halfedge");
             let mut curr = start;
             loop {
                 let h_idx = curr;
-                let v_idx = self.geometry.mesh.halfedges[h_idx].vertex.expect("Should have vertex");
-                let twin_idx = self.geometry.mesh.halfedges[h_idx].twin.expect("Should have twin");
-                let twin_v_idx = self.geometry.mesh.halfedges[twin_idx].vertex.expect("Should have vertex");
+                let v_idx = self.geometry.mesh.backend.halfedge_vertex(h_idx).expect("Should have vertex");
+                let twin_idx = self.geometry.mesh.backend.halfedge_twin(h_idx).expect("Should have twin");
+                let twin_v_idx = self.geometry.mesh.backend.halfedge_vertex(twin_idx).expect("Should have vertex");
 
                 t.add_entry(i_img * 0.25, v_idx, twin_v_idx);
                 t.add_entry(i_img * -0.25, twin_v_idx, v_idx);
 
-                curr = self.geometry.mesh.halfedges[curr].next.expect("Next should exist");
+                curr = self.geometry.mesh.backend.halfedge_next(curr).expect("Next should exist");
                 if curr == start { break; }
             }
         }
@@ -46,8 +48,9 @@ impl<'a> SpectralConformalParameterization<'a> {
         let ec = self.build_conformal_energy();
         let z = Solvers::solve_inverse_power_method(&ec);
         
-        let mut flattening = vec![faer::Mat::zeros(3, 1); self.geometry.mesh.vertices.len()];
-        for i in 0..self.geometry.mesh.vertices.len() {
+        let num_v = self.geometry.mesh.num_vertices();
+        let mut flattening = vec![faer::Mat::zeros(3, 1); num_v];
+        for i in 0..num_v {
             let zi = z.read(i, 0);
             flattening[i] = faer::mat![[zi.re], [zi.im], [0.0]];
         }
@@ -80,8 +83,8 @@ impl<'a> SpectralConformalParameterization<'a> {
     }
 }
 
-pub struct BoundaryFirstFlattening<'a> {
-    pub geometry: &'a Geometry<'a>,
+pub struct BoundaryFirstFlattening<'a, B: MeshBackend> {
+    pub geometry: &'a Geometry<'a, B>,
     pub n_v: usize,
     pub n_i: usize,
     pub n_b: usize,
@@ -96,8 +99,8 @@ pub struct BoundaryFirstFlattening<'a> {
     pub a_full: SparseMatrix<f64>,
 }
 
-impl<'a> BoundaryFirstFlattening<'a> {
-    pub fn new(geometry: &'a Geometry<'a>) -> Self {
+impl<'a, B: MeshBackend> BoundaryFirstFlattening<'a, B> {
+    pub fn new(geometry: &'a Geometry<'a, B>) -> Self {
         let mut bff = Self {
             geometry,
             n_v: 0, n_i: 0, n_b: 0,
@@ -127,17 +130,17 @@ impl<'a> BoundaryFirstFlattening<'a> {
     }
 
     fn index_vertices(&mut self) {
-        self.n_v = self.geometry.mesh.vertices.len();
-        for v in &self.geometry.mesh.vertices {
-            if !self.geometry.mesh.on_boundary(v.index) {
-                self.vertex_index.insert(v.index, self.n_i);
+        self.n_v = self.geometry.mesh.num_vertices();
+        for i in 0..self.n_v {
+            if !self.geometry.mesh.on_boundary(i) {
+                self.vertex_index.insert(i, self.n_i);
                 self.n_i += 1;
             }
         }
-        for v in &self.geometry.mesh.vertices {
-            if self.geometry.mesh.on_boundary(v.index) {
-                self.b_vertex_index.insert(v.index, self.n_b);
-                self.vertex_index.insert(v.index, self.n_i + self.n_b);
+        for i in 0..self.n_v {
+            if self.geometry.mesh.on_boundary(i) {
+                self.b_vertex_index.insert(i, self.n_b);
+                self.vertex_index.insert(i, self.n_i + self.n_b);
                 self.n_b += 1;
             }
         }
@@ -146,15 +149,15 @@ impl<'a> BoundaryFirstFlattening<'a> {
     fn compute_integrated_curvatures(&mut self) {
         self.k_gaussian = DenseMatrix::zeros(self.n_i, 1);
         self.k_geodesic = DenseMatrix::zeros(self.n_b, 1);
-        for v in &self.geometry.mesh.vertices {
-            let ad = self.geometry.angle_defect(v);
-            if self.geometry.mesh.on_boundary(v.index) {
-                if let Some(&bi) = self.b_vertex_index.get(&v.index) {
+        for i in 0..self.n_v {
+            let ad = self.geometry.angle_defect(&Vertex::new(i));
+            if self.geometry.mesh.on_boundary(i) {
+                if let Some(&bi) = self.b_vertex_index.get(&i) {
                     self.k_geodesic[(bi, 0)] = ad;
                 }
             } else {
-                if let Some(&i) = self.vertex_index.get(&v.index) {
-                    self.k_gaussian[(i, 0)] = ad;
+                if let Some(&idx) = self.vertex_index.get(&i) {
+                    self.k_gaussian[(idx, 0)] = ad;
                 }
             }
         }
@@ -162,30 +165,30 @@ impl<'a> BoundaryFirstFlattening<'a> {
 
     fn compute_boundary_lengths(&mut self) {
         self.l_lengths = DenseMatrix::zeros(self.n_b, 1);
-        if self.geometry.mesh.boundaries.is_empty() { return; }
-        let b = &self.geometry.mesh.boundaries[0];
-        let start = b.halfedge.expect("Boundary should have halfedge");
+        let num_boundaries = self.geometry.mesh.num_boundaries();
+        if num_boundaries == 0 { return; }
+        let start = self.geometry.mesh.backend.boundary_halfedge(0).expect("Boundary should have halfedge");
         let mut curr = start;
         loop {
             let h_idx = curr;
-            let v_idx = self.geometry.mesh.halfedges[h_idx].vertex.expect("Vertex should exist");
+            let v_idx = self.geometry.mesh.backend.halfedge_vertex(h_idx).expect("Vertex should exist");
             if let Some(&bi) = self.b_vertex_index.get(&v_idx) {
-                let e_idx = self.geometry.mesh.halfedges[h_idx].edge.expect("Edge should exist");
+                let e_idx = self.geometry.mesh.backend.halfedge_edge(h_idx).expect("Edge should exist");
                 self.l_lengths[(bi, 0)] = self.geometry.length(e_idx);
             }
-            curr = self.geometry.mesh.halfedges[curr].next.expect("Next should exist");
+            curr = self.geometry.mesh.backend.halfedge_next(curr).expect("Next should exist");
             if curr == start { break; }
         }
     }
 
     fn build_special_laplace(&self) -> SparseMatrix<f64> {
         let mut t = Triplet::<f64>::new(self.n_v, self.n_v);
-        for v in &self.geometry.mesh.vertices {
-            let i = *self.vertex_index.get(&v.index).unwrap();
+        for i_orig in 0..self.n_v {
+            let i = *self.vertex_index.get(&i_orig).unwrap();
             let mut sum = 1e-8;
-            for h_idx in self.geometry.mesh.vertex_adjacent_halfedges(v.index, true) {
-                let twin_idx = self.geometry.mesh.halfedges[h_idx].twin.unwrap();
-                let j_orig = self.geometry.mesh.halfedges[twin_idx].vertex.unwrap();
+            for h_idx in self.geometry.mesh.vertex_adjacent_halfedges(i_orig, true) {
+                let twin_idx = self.geometry.mesh.backend.halfedge_twin(h_idx).unwrap();
+                let j_orig = self.geometry.mesh.backend.halfedge_vertex(twin_idx).unwrap();
                 let j = *self.vertex_index.get(&j_orig).unwrap();
                 let weight = (self.geometry.cotan(h_idx) + self.geometry.cotan(twin_idx)) / 2.0;
                 sum += weight;

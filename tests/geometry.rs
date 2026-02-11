@@ -1,7 +1,7 @@
-use geometry_processing_rs::core::mesh::Mesh;
+use geometry_processing_rs::core::mesh::{Mesh, MeshBackend, Vertex, Face};
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::linear_algebra::DenseMatrix;
-use geometry_processing_rs::linear_algebra::traits::SparseOps;
+use geometry_processing_rs::linear_algebra::traits::{SparseOps, DenseMatrixOps};
 
 mod common;
 use common::{load_solution, parse_polygon_soup, assert_near, assert_vector_near};
@@ -68,47 +68,50 @@ fn test_geometry() {
     }
 
     // Test Dual Areas
-    for v in &mesh.vertices {
-        assert_near(barycentric_dual_areas_sol[v.index], geometry.barycentric_dual_area(v), 1e-5);
-        assert_near(circumcentric_dual_areas_sol[v.index], geometry.circumcentric_dual_area(v), 1e-5);
+    for i in 0..mesh.num_vertices() {
+        let v = Vertex::new(i);
+        assert_near(barycentric_dual_areas_sol[i], geometry.barycentric_dual_area(&v), 1e-5);
+        assert_near(circumcentric_dual_areas_sol[i], geometry.circumcentric_dual_area(&v), 1e-5);
     }
 
     // Test Normals
-    for v in &mesh.vertices {
-        assert_vector_near(&angle_weighted_normals_sol[v.index], &geometry.vertex_normal_angle_weighted(v), 1e-5);
-        assert_vector_near(&sphere_inscribed_normals_sol[v.index], &geometry.vertex_normal_sphere_inscribed(v), 1e-5);
-        assert_vector_near(&area_weighted_normals_sol[v.index], &geometry.vertex_normal_area_weighted(v), 1e-5);
+    for i in 0..mesh.num_vertices() {
+        let v = Vertex::new(i);
+        assert_vector_near(&angle_weighted_normals_sol[i], &geometry.vertex_normal_angle_weighted(&v), 1e-5);
+        assert_vector_near(&sphere_inscribed_normals_sol[i], &geometry.vertex_normal_sphere_inscribed(&v), 1e-5);
+        assert_vector_near(&area_weighted_normals_sol[i], &geometry.vertex_normal_area_weighted(&v), 1e-5);
         
-        let gn = geometry.vertex_normal_gauss_curvature(v);
-        let sol_gn = &gauss_curvature_normals_sol[v.index];
+        let gn = geometry.vertex_normal_gauss_curvature(&v);
+        let sol_gn = &gauss_curvature_normals_sol[i];
         let diff1 = &gn - sol_gn;
         let diff2 = &(-&gn) - sol_gn;
         let norm1: f64 = (diff1.transpose() * &diff1).read(0, 0).sqrt();
         let norm2: f64 = (diff2.transpose() * &diff2).read(0, 0).sqrt();
         if norm1 > 1e-5 && norm2 > 1e-5 {
-             panic!("Gauss normal mismatch at vertex {}", v.index);
+             panic!("Gauss normal mismatch at vertex {}", i);
         }
 
-        let mn = geometry.vertex_normal_mean_curvature(v);
-        let sol_mn = &mean_curvature_normals_sol[v.index];
+        let mn = geometry.vertex_normal_mean_curvature(&v);
+        let sol_mn = &mean_curvature_normals_sol[i];
         let dmn1 = &mn - sol_mn;
         let dmn2 = &(-&mn) - sol_mn;
         let mnorm1: f64 = (dmn1.transpose() * &dmn1).read(0, 0).sqrt();
         let mnorm2: f64 = (dmn2.transpose() * &dmn2).read(0, 0).sqrt();
         if mnorm1 > 1e-5 && mnorm2 > 1e-5 {
-             panic!("Mean normal mismatch at vertex {}", v.index);
+             panic!("Mean normal mismatch at vertex {}", i);
         }
     }
 
     // Test Curvatures
-    for v in &mesh.vertices {
-        assert_near(scalar_gauss_curvatures_sol[v.index], geometry.scalar_gauss_curvature(v), 1e-5);
-        assert_near(scalar_mean_curvatures_sol[v.index], geometry.scalar_mean_curvature(v), 1e-5);
+    for i in 0..mesh.num_vertices() {
+        let v = Vertex::new(i);
+        assert_near(scalar_gauss_curvatures_sol[i], geometry.scalar_gauss_curvature(&v), 1e-5);
+        assert_near(scalar_mean_curvatures_sol[i], geometry.scalar_mean_curvature(&v), 1e-5);
         
-        let [mut k1, mut k2] = geometry.principal_curvatures(v);
+        let [mut k1, mut k2] = geometry.principal_curvatures(&v);
         if k1.abs() > k2.abs() { std::mem::swap(&mut k1, &mut k2); }
-        assert_near(k1_sol[v.index], k1, 1e-5);
-        assert_near(k2_sol[v.index], k2, 1e-5);
+        assert_near(k1_sol[i], k1, 1e-5);
+        assert_near(k2_sol[i], k2, 1e-5);
     }
 
     assert_near(total_angle_defect_sol, geometry.total_angle_defect(), 1e-5);
@@ -121,9 +124,10 @@ fn test_geometry() {
 
     // Test Mass Matrix
     let mass_matrix = geometry.mass_matrix();
-    let ones = DenseMatrix::from_fn(mesh.vertices.len(), 1, |_, _| 1.0);
+    let n_v = mesh.num_vertices();
+    let ones = DenseMatrix::zeros(n_v, 1).add_scalar(1.0);
     let diag = &mass_matrix * &ones;
-    for i in 0..mesh.vertices.len() {
+    for i in 0..n_v {
         assert_near(mass_sol[i], diag[(i, 0)], 1e-5);
     }
 }

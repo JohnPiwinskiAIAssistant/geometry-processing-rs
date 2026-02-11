@@ -1,13 +1,14 @@
 use crate::core::geometry::Geometry;
+use crate::core::mesh::MeshBackend;
 use crate::core::dec::DEC;
 use crate::linear_algebra::SparseMatrix;
 
-pub struct DiscreteExteriorCalculusProject<'a> {
-    pub geometry: &'a Geometry<'a>,
+pub struct DiscreteExteriorCalculusProject<'a, B: MeshBackend> {
+    pub geometry: &'a Geometry<'a, B>,
 }
 
-impl<'a> DiscreteExteriorCalculusProject<'a> {
-    pub fn new(geometry: &'a Geometry<'a>) -> Self {
+impl<'a, B: MeshBackend> DiscreteExteriorCalculusProject<'a, B> {
+    pub fn new(geometry: &'a Geometry<'a, B>) -> Self {
         Self { geometry }
     }
 

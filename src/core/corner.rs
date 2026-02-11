@@ -1,39 +1,35 @@
-use crate::core::mesh::Mesh;
+use crate::core::mesh::{Mesh, MeshBackend};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Corner {
-    pub halfedge: Option<usize>,
     pub index: usize,
 }
 
 impl Corner {
     pub fn new(index: usize) -> Self {
-        Self {
-            halfedge: None,
-            index,
-        }
+        Self { index }
     }
 
-    pub fn vertex(&self, mesh: &Mesh) -> usize {
-        let h_idx = self.halfedge.expect("Corner should have a halfedge");
-        let prev_idx = mesh.halfedges[h_idx].prev.expect("Prev should exist");
-        mesh.halfedges[prev_idx].vertex.expect("Vertex should exist")
+    pub fn vertex<B: MeshBackend>(&self, mesh: &Mesh<B>) -> usize {
+        let h_idx = mesh.backend.corner_halfedge(self.index).expect("Corner should have a halfedge");
+        let prev_idx = mesh.backend.halfedge_prev(h_idx).expect("Prev should exist");
+        mesh.backend.halfedge_vertex(prev_idx).expect("Vertex should exist")
     }
 
-    pub fn face(&self, mesh: &Mesh) -> usize {
-        let h_idx = self.halfedge.expect("Corner should have a halfedge");
-        mesh.halfedges[h_idx].face.expect("Face should exist")
+    pub fn face<B: MeshBackend>(&self, mesh: &Mesh<B>) -> usize {
+        let h_idx = mesh.backend.corner_halfedge(self.index).expect("Corner should have a halfedge");
+        mesh.backend.halfedge_face(h_idx).expect("Face should exist")
     }
 
-    pub fn next(&self, mesh: &Mesh) -> Option<usize> {
-        let h_idx = self.halfedge.expect("Corner should have a halfedge");
-        let next_idx = mesh.halfedges[h_idx].next.expect("Next should exist");
-        mesh.halfedges[next_idx].corner
+    pub fn next<B: MeshBackend>(&self, mesh: &Mesh<B>) -> Option<usize> {
+        let h_idx = mesh.backend.corner_halfedge(self.index).expect("Corner should have a halfedge");
+        let next_idx = mesh.backend.halfedge_next(h_idx).expect("Next should exist");
+        mesh.backend.halfedge_corner(next_idx)
     }
 
-    pub fn prev(&self, mesh: &Mesh) -> Option<usize> {
-        let h_idx = self.halfedge.expect("Corner should have a halfedge");
-        let prev_idx = mesh.halfedges[h_idx].prev.expect("Prev should exist");
-        mesh.halfedges[prev_idx].corner
+    pub fn prev<B: MeshBackend>(&self, mesh: &Mesh<B>) -> Option<usize> {
+        let h_idx = mesh.backend.corner_halfedge(self.index).expect("Corner should have a halfedge");
+        let prev_idx = mesh.backend.halfedge_prev(h_idx).expect("Prev should exist");
+        mesh.backend.halfedge_corner(prev_idx)
     }
 }

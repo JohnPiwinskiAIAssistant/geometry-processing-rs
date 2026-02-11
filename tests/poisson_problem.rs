@@ -1,4 +1,4 @@
-use geometry_processing_rs::core::mesh::{Mesh};
+use geometry_processing_rs::core::mesh::{Mesh, MeshBackend};
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::projects::poisson_problem::{ScalarPoissonProblem};
 use geometry_processing_rs::linear_algebra::{DenseMatrix};
@@ -48,12 +48,12 @@ fn test_poisson_problem() {
     mesh.build(&soup);
     let geometry = Geometry::new(&mesh, soup.v, false);
     
-    let sol = parse_poisson_solution(&solution_data, mesh.vertices.len());
+    let sol = parse_poisson_solution(&solution_data, mesh.num_vertices());
 
     let scalar_poisson_problem = ScalarPoissonProblem::new(&geometry);
     let phi = scalar_poisson_problem.solve(&sol.rho);
 
-    for i in 0..mesh.vertices.len() {
+    for i in 0..mesh.num_vertices() {
         assert!((phi[(i, 0)] - sol.phi_sol[(i, 0)]).abs() < 1e-3, "Poisson solution mismatch at vertex {}: got {}, expected {}", i, phi[(i, 0)], sol.phi_sol[(i, 0)]);
     }
 }

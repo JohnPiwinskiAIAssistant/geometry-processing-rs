@@ -1,4 +1,4 @@
-use geometry_processing_rs::core::mesh::{Mesh};
+use geometry_processing_rs::core::mesh::{Mesh, MeshBackend};
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::projects::geometric_flow::{MeanCurvatureFlow, ModifiedMeanCurvatureFlow};
 use geometry_processing_rs::linear_algebra::{Vector};
@@ -62,11 +62,11 @@ fn test_geometric_flow() {
     {
         let mut geometry = Geometry::new(&mesh, soup.v.clone(), false);
         {
-            let mut flow = MeanCurvatureFlow::new(&mut geometry);
+            let flow = MeanCurvatureFlow::new();
             for _ in 0..sol.steps {
-                flow.integrate(sol.h);
+                flow.integrate(&mut geometry, sol.h);
             }
-        } // flow dropped here
+        }
 
         for i in 0..sol.mcf_positions.len() {
             let diff_mat = &geometry.positions[i] - &sol.mcf_positions[i];
@@ -79,11 +79,11 @@ fn test_geometric_flow() {
     {
         let mut geometry = Geometry::new(&mesh, soup.v, false);
         {
-            let mut flow = ModifiedMeanCurvatureFlow::new(&mut geometry);
+            let flow = ModifiedMeanCurvatureFlow::new(&geometry);
             for _ in 0..sol.steps {
-                flow.integrate(sol.h);
+                flow.integrate(&mut geometry, sol.h);
             }
-        } // flow dropped here
+        }
 
         for i in 0..sol.mmcf_positions.len() {
             let diff_mat = &geometry.positions[i] - &sol.mmcf_positions[i];

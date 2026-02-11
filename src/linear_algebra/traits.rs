@@ -68,6 +68,7 @@ pub trait DenseMatrixOps<S: Scalar>: Sized {
     
     fn dot(&self, other: &Self) -> S;
     fn transpose(&self) -> Self;
+    fn add_scalar(&self, s: S) -> Self;
 }
 
 impl<S: Scalar> DenseMatrixOps<S> for Mat<S> {
@@ -102,6 +103,10 @@ impl<S: Scalar> DenseMatrixOps<S> for Mat<S> {
     
     fn transpose(&self) -> Self {
         Mat::from_fn(self.ncols(), self.nrows(), |i, j| self.read(j, i))
+    }
+
+    fn add_scalar(&self, s: S) -> Self {
+        Mat::from_fn(self.nrows(), self.ncols(), |i, j| self.read(i, j) + s)
     }
 }
 

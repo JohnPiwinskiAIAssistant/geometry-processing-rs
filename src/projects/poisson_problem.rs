@@ -1,16 +1,17 @@
 use crate::core::geometry::Geometry;
+use crate::core::mesh::MeshBackend;
 use crate::linear_algebra::{DenseMatrix, SparseMatrix, Cholesky};
 use crate::linear_algebra::traits::LinearSolver;
 
-pub struct ScalarPoissonProblem<'a> {
-    pub geometry: &'a Geometry<'a>,
+pub struct ScalarPoissonProblem<'a, B: MeshBackend> {
+    pub geometry: &'a Geometry<'a, B>,
     pub a: SparseMatrix<f64>,
     pub m: SparseMatrix<f64>,
     pub total_area: f64,
 }
 
-impl<'a> ScalarPoissonProblem<'a> {
-    pub fn new(geometry: &'a Geometry<'a>) -> Self {
+impl<'a, B: MeshBackend> ScalarPoissonProblem<'a, B> {
+    pub fn new(geometry: &'a Geometry<'a, B>) -> Self {
         let a = geometry.laplace_matrix();
         let m = geometry.mass_matrix();
         let total_area = geometry.total_area();

@@ -1,8 +1,8 @@
-use geometry_processing_rs::core::mesh::{Mesh};
+use geometry_processing_rs::core::mesh::{Mesh, MeshBackend, Vertex, Face};
 use geometry_processing_rs::core::geometry::Geometry;
 use geometry_processing_rs::core::dec::DEC;
-use geometry_processing_rs::linear_algebra::{DenseMatrix};
-use geometry_processing_rs::linear_algebra::traits::SparseOps;
+use geometry_processing_rs::linear_algebra::DenseMatrix;
+use geometry_processing_rs::linear_algebra::traits::{SparseOps, DenseMatrixOps};
 
 mod common;
 use common::{load_solution, parse_polygon_soup};
@@ -56,27 +56,27 @@ fn test_dec() {
     let geometry = Geometry::new(&mesh, soup.v, false);
     let sol = parse_dec_solution(&solution_data);
 
-    let v_count = mesh.vertices.len();
-    let e_count = mesh.edges.len();
-    let f_count = mesh.faces.len();
+    let v_count = mesh.num_vertices();
+    let e_count = mesh.num_edges();
+    let f_count = mesh.num_faces();
 
     // HodgeStar0Form
     let h_star0 = DEC::build_hodge_star_0_form(&geometry);
-    let h_star0_res = &h_star0 * &DenseMatrix::from_fn(v_count, 1, |_, _| 1.0);
+    let h_star0_res = &h_star0 * &DenseMatrix::zeros(v_count, 1).add_scalar(1.0);
     for i in 0..v_count {
         assert!((h_star0_res[(i, 0)] - sol.hodge0[i]).abs() < 1e-6);
     }
 
     // HodgeStar1Form
     let h_star1 = DEC::build_hodge_star_1_form(&geometry);
-    let h_star1_res = &h_star1 * &DenseMatrix::from_fn(e_count, 1, |_, _| 1.0);
+    let h_star1_res = &h_star1 * &DenseMatrix::zeros(e_count, 1).add_scalar(1.0);
     for i in 0..e_count {
         assert!((h_star1_res[(i, 0)] - sol.hodge1[i]).abs() < 1e-6);
     }
 
     // HodgeStar2Form
     let h_star2 = DEC::build_hodge_star_2_form(&geometry);
-    let h_star2_res = &h_star2 * &DenseMatrix::from_fn(f_count, 1, |_, _| 1.0);
+    let h_star2_res = &h_star2 * &DenseMatrix::zeros(f_count, 1).add_scalar(1.0);
     for i in 0..f_count {
         assert!((h_star2_res[(i, 0)] - sol.hodge2[i]).abs() < 1e-3);
     }

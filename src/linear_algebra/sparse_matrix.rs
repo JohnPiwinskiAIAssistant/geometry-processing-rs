@@ -1,8 +1,6 @@
 use faer::sparse::SparseColMat;
 use faer::prelude::SpSolver;
-use num_complex::Complex64;
 use crate::linear_algebra::traits::{Scalar, SparseOps, LinearSolver};
-use crate::linear_algebra::{DenseMatrix};
 
 pub type SparseMatrix<S> = SparseColMat<usize, S>;
 
